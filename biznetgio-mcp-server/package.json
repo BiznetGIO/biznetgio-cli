@@ -1,0 +1,20 @@
+{
+  "name": "@biznetgio/mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for Biznet Gio Portal API",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "biznetgio-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": ["biznetgio", "mcp", "cloud"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^4.3.6"
+  }
+}

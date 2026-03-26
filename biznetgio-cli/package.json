@@ -1,0 +1,21 @@
+{
+  "name": "@biznetgio/cli",
+  "version": "1.0.0",
+  "description": "CLI tool for Biznet Gio Portal API",
+  "type": "module",
+  "bin": {
+    "biznetgio": "./bin/biznetgio.js"
+  },
+  "scripts": {
+    "start": "node bin/biznetgio.js"
+  },
+  "keywords": ["biznetgio", "cli", "cloud"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1"
+  }
+}
