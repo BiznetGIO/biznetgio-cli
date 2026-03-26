@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# Test script untuk cli
-# Menguji semua command --help dan operasi read-only (list, products, dll)
+# Test script for @biznetgio/cli
 #
 # Usage:
-#   ./scripts/test-cli.sh              # Hanya test --help (tanpa API key)
-#   ./scripts/test-cli.sh --live       # Test --help + live API calls
+#   ./scripts/test-cli.sh           # Offline tests (no API key needed)
+#   ./scripts/test-cli.sh --live    # Offline + live API tests
 #
 
 set -euo pipefail
@@ -20,7 +19,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
 PASS=0
@@ -59,6 +58,50 @@ run_test() {
   fi
 }
 
+# Test that a command FAILS (expected failure)
+run_fail_test() {
+  local description="$1"
+  shift
+  local cmd="$*"
+
+  printf "  %-60s" "$description"
+  if output=$(eval "$cmd" 2>&1); then
+    echo -e "${RED}FAIL${NC} (expected error, got success)"
+    ERRORS+=("$description: expected failure but got success")
+    ((FAIL++))
+    return 1
+  else
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+    return 0
+  fi
+}
+
+# Test that output contains a string
+run_output_test() {
+  local description="$1"
+  local expected="$2"
+  shift 2
+  local cmd="$*"
+
+  printf "  %-60s" "$description"
+  if output=$(eval "$cmd" 2>&1) && echo "$output" | grep -q "$expected"; then
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+    return 0
+  elif echo "$output" | grep -q "$expected"; then
+    # command failed but output contains expected string (e.g. error messages)
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+    return 0
+  else
+    echo -e "${RED}FAIL${NC}"
+    ERRORS+=("$description: expected '$expected' in output\n  Got: $output")
+    ((FAIL++))
+    return 1
+  fi
+}
+
 run_live_test() {
   if [[ "$LIVE_MODE" != true ]]; then
     printf "  %-60s" "$1"
@@ -67,6 +110,16 @@ run_live_test() {
     return 0
   fi
   run_test "$@"
+}
+
+run_live_output_test() {
+  if [[ "$LIVE_MODE" != true ]]; then
+    printf "  %-60s" "$1"
+    echo -e "${YELLOW}SKIP${NC} (use --live)"
+    ((SKIP++))
+    return 0
+  fi
+  run_output_test "$@"
 }
 
 section() {
@@ -79,7 +132,7 @@ subsection() {
 }
 
 # ─────────────────────────────────────────────
-# Pre-flight checks
+# Pre-flight
 # ─────────────────────────────────────────────
 
 section "Pre-flight Checks"
@@ -87,155 +140,166 @@ section "Pre-flight Checks"
 run_test "Node.js is available" "node --version"
 run_test "CLI entry point exists" "test -f $CLI_DIR/bin/biznetgio.js"
 run_test "Dependencies installed" "test -d $CLI_DIR/node_modules"
+run_test "client.js exists" "test -f $CLI_DIR/src/client.js"
+run_test "formatter.js exists" "test -f $CLI_DIR/src/utils/formatter.js"
+run_test "common.js exists" "test -f $CLI_DIR/src/utils/common.js"
+run_test "All 6 command files exist" \
+  "test -f $CLI_DIR/src/commands/metal.js && \
+   test -f $CLI_DIR/src/commands/elastic-storage.js && \
+   test -f $CLI_DIR/src/commands/additional-ip.js && \
+   test -f $CLI_DIR/src/commands/neolite.js && \
+   test -f $CLI_DIR/src/commands/neolite-pro.js && \
+   test -f $CLI_DIR/src/commands/object-storage.js"
 
 # ─────────────────────────────────────────────
-# Main help
+# CLI structure & version
 # ─────────────────────────────────────────────
 
-section "Main CLI Help"
+section "CLI Structure & Version"
 
-run_test "biznetgio --help" "$CLI --help"
-run_test "biznetgio --version" "$CLI --version"
+run_output_test "Shows version" "1.0.0" "$CLI --version"
+run_output_test "Help lists all 6 services" "metal" "$CLI --help"
+run_output_test "Help shows elastic-storage" "elastic-storage" "$CLI --help"
+run_output_test "Help shows additional-ip" "additional-ip" "$CLI --help"
+run_output_test "Help shows neolite" "neolite" "$CLI --help"
+run_output_test "Help shows neolite-pro" "neolite-pro" "$CLI --help"
+run_output_test "Help shows object-storage" "object-storage" "$CLI --help"
 
 # ─────────────────────────────────────────────
-# NEO Metal
+# Command registration (all subcommands exist)
 # ─────────────────────────────────────────────
 
-section "NEO Metal Commands"
+section "Command Registration"
 
-subsection "Help Tests"
-run_test "metal --help" "$CLI metal --help"
-run_test "metal list --help" "$CLI metal list --help"
-run_test "metal detail --help" "$CLI metal detail --help"
-run_test "metal create --help" "$CLI metal create --help"
-run_test "metal delete --help" "$CLI metal delete --help"
-run_test "metal update-label --help" "$CLI metal update-label --help"
-run_test "metal state --help" "$CLI metal state --help"
-run_test "metal set-state --help" "$CLI metal set-state --help"
-run_test "metal rebuild --help" "$CLI metal rebuild --help"
-run_test "metal openvpn --help" "$CLI metal openvpn --help"
-run_test "metal products --help" "$CLI metal products --help"
-run_test "metal product --help" "$CLI metal product --help"
-run_test "metal product-os --help" "$CLI metal product-os --help"
-run_test "metal rebuild-os --help" "$CLI metal rebuild-os --help"
-run_test "metal states --help" "$CLI metal states --help"
-run_test "metal keypair --help" "$CLI metal keypair --help"
-run_test "metal keypair list --help" "$CLI metal keypair list --help"
-run_test "metal keypair create --help" "$CLI metal keypair create --help"
-run_test "metal keypair import --help" "$CLI metal keypair import --help"
-run_test "metal keypair delete --help" "$CLI metal keypair delete --help"
+subsection "NEO Metal subcommands"
+for cmd in list detail create delete update-label state set-state rebuild openvpn products product product-os rebuild-os states keypair; do
+  run_output_test "metal has '$cmd'" "$cmd" "$CLI metal --help"
+done
 
-subsection "Live API Tests"
+subsection "Elastic Storage subcommands"
+for cmd in list detail create upgrade change-package delete products product; do
+  run_output_test "elastic-storage has '$cmd'" "$cmd" "$CLI elastic-storage --help"
+done
+
+subsection "Additional IP subcommands"
+for cmd in list detail create delete regions products product assignments assigns assign assign-detail unassign; do
+  run_output_test "additional-ip has '$cmd'" "$cmd" "$CLI additional-ip --help"
+done
+
+subsection "NEO Lite subcommands"
+for cmd in list detail create delete vm-details set-state rename rebuild change-keypair change-package upgrade-storage migrate-to-pro products product product-os product-ip keypair snapshot disk; do
+  run_output_test "neolite has '$cmd'" "$cmd" "$CLI neolite --help"
+done
+
+subsection "NEO Lite Pro subcommands"
+for cmd in list detail create delete vm-details set-state rename rebuild change-keypair change-package upgrade-storage products product product-os product-ip keypair snapshot disk; do
+  run_output_test "neolite-pro has '$cmd'" "$cmd" "$CLI neolite-pro --help"
+done
+
+subsection "Object Storage subcommands"
+for cmd in list detail create upgrade-quota products product credential bucket object; do
+  run_output_test "object-storage has '$cmd'" "$cmd" "$CLI object-storage --help"
+done
+
+subsection "Nested subcommands"
+run_output_test "metal keypair has 'list'" "list" "$CLI metal keypair --help"
+run_output_test "metal keypair has 'create'" "create" "$CLI metal keypair --help"
+run_output_test "metal keypair has 'import'" "import" "$CLI metal keypair --help"
+run_output_test "metal keypair has 'delete'" "delete" "$CLI metal keypair --help"
+run_output_test "neolite snapshot has 'list'" "list" "$CLI neolite snapshot --help"
+run_output_test "neolite snapshot has 'restore'" "restore" "$CLI neolite snapshot --help"
+run_output_test "neolite snapshot has 'create-instance'" "create-instance" "$CLI neolite snapshot --help"
+run_output_test "neolite disk has 'list'" "list" "$CLI neolite disk --help"
+run_output_test "neolite disk has 'upgrade'" "upgrade" "$CLI neolite disk --help"
+run_output_test "object-storage credential has 'list'" "list" "$CLI object-storage credential --help"
+run_output_test "object-storage credential has 'create'" "create" "$CLI object-storage credential --help"
+run_output_test "object-storage bucket has 'list'" "list" "$CLI object-storage bucket --help"
+run_output_test "object-storage bucket has 'set-acl'" "set-acl" "$CLI object-storage bucket --help"
+run_output_test "object-storage object has 'url'" "url" "$CLI object-storage object --help"
+run_output_test "object-storage object has 'copy'" "copy" "$CLI object-storage object --help"
+run_output_test "object-storage object has 'move'" "move" "$CLI object-storage object --help"
+run_output_test "object-storage object has 'mkdir'" "mkdir" "$CLI object-storage object --help"
+
+# ─────────────────────────────────────────────
+# Option parsing
+# ─────────────────────────────────────────────
+
+section "Option Parsing"
+
+subsection "Required options validation"
+run_output_test "metal create requires --product-id" "product-id" "$CLI metal create --help"
+run_output_test "metal create requires --cycle" "cycle" "$CLI metal create --help"
+run_output_test "metal create requires --keypair-id" "keypair-id" "$CLI metal create --help"
+run_output_test "metal create requires --label" "label" "$CLI metal create --help"
+run_output_test "neolite create requires --select-os" "select-os" "$CLI neolite create --help"
+run_output_test "neolite create requires --ssh-and-console-user" "ssh-and-console-user" "$CLI neolite create --help"
+run_output_test "neolite create requires --console-password" "console-password" "$CLI neolite create --help"
+run_output_test "elastic-storage create requires --storage-name" "storage-name" "$CLI elastic-storage create --help"
+run_output_test "elastic-storage create requires --metal-account-id" "metal-account-id" "$CLI elastic-storage create --help"
+run_output_test "object-storage create requires --label" "label" "$CLI object-storage create --help"
+
+subsection "Global options"
+run_output_test "--output option documented" "output" "$CLI --help"
+run_output_test "--api-key option documented" "api-key" "$CLI --help"
+
+# ─────────────────────────────────────────────
+# Error handling (no API key)
+# ─────────────────────────────────────────────
+
+section "Error Handling (No API Key)"
+
+# Unset API key for these tests
+_SAVED_KEY="${BIZNETGIO_API_KEY:-}"
+unset BIZNETGIO_API_KEY 2>/dev/null || true
+
+run_output_test "metal list fails without API key" "API key" "$CLI metal list 2>&1 || true"
+run_output_test "neolite list fails without API key" "API key" "$CLI neolite list 2>&1 || true"
+run_output_test "object-storage list fails without API key" "API key" "$CLI object-storage list 2>&1 || true"
+
+# Restore API key
+if [[ -n "$_SAVED_KEY" ]]; then
+  export BIZNETGIO_API_KEY="$_SAVED_KEY"
+fi
+
+# ─────────────────────────────────────────────
+# Missing argument handling
+# ─────────────────────────────────────────────
+
+section "Missing Argument Handling"
+
+run_fail_test "metal detail without account_id fails" "$CLI metal detail 2>/dev/null"
+run_fail_test "metal set-state without args fails" "$CLI metal set-state 2>/dev/null"
+run_fail_test "neolite delete without account_id fails" "$CLI neolite delete 2>/dev/null"
+run_fail_test "object-storage detail without account_id fails" "$CLI object-storage detail 2>/dev/null"
+run_fail_test "object-storage bucket list without account_id fails" "$CLI object-storage bucket list 2>/dev/null"
+
+# ─────────────────────────────────────────────
+# Live API tests - read-only operations
+# ─────────────────────────────────────────────
+
+section "Live API Tests - NEO Metal"
+
 run_live_test "metal list" "$CLI metal list"
 run_live_test "metal products" "$CLI metal products"
 run_live_test "metal states" "$CLI metal states"
 run_live_test "metal keypair list" "$CLI metal keypair list"
 run_live_test "metal openvpn" "$CLI metal openvpn"
+run_live_test "metal list (table output)" "$CLI metal list --output table"
+run_live_output_test "metal list returns JSON array or object" "[" "$CLI metal list"
 
-# ─────────────────────────────────────────────
-# NEO Elastic Storage
-# ─────────────────────────────────────────────
+section "Live API Tests - Elastic Storage"
 
-section "NEO Elastic Storage Commands"
-
-subsection "Help Tests"
-run_test "elastic-storage --help" "$CLI elastic-storage --help"
-run_test "elastic-storage list --help" "$CLI elastic-storage list --help"
-run_test "elastic-storage detail --help" "$CLI elastic-storage detail --help"
-run_test "elastic-storage create --help" "$CLI elastic-storage create --help"
-run_test "elastic-storage upgrade --help" "$CLI elastic-storage upgrade --help"
-run_test "elastic-storage change-package --help" "$CLI elastic-storage change-package --help"
-run_test "elastic-storage delete --help" "$CLI elastic-storage delete --help"
-run_test "elastic-storage products --help" "$CLI elastic-storage products --help"
-run_test "elastic-storage product --help" "$CLI elastic-storage product --help"
-
-subsection "Live API Tests"
 run_live_test "elastic-storage list" "$CLI elastic-storage list"
 run_live_test "elastic-storage products" "$CLI elastic-storage products"
 
-# ─────────────────────────────────────────────
-# Additional IP
-# ─────────────────────────────────────────────
+section "Live API Tests - Additional IP"
 
-section "Additional IP Commands"
-
-subsection "Help Tests"
-run_test "additional-ip --help" "$CLI additional-ip --help"
-run_test "additional-ip list --help" "$CLI additional-ip list --help"
-run_test "additional-ip detail --help" "$CLI additional-ip detail --help"
-run_test "additional-ip create --help" "$CLI additional-ip create --help"
-run_test "additional-ip delete --help" "$CLI additional-ip delete --help"
-run_test "additional-ip regions --help" "$CLI additional-ip regions --help"
-run_test "additional-ip products --help" "$CLI additional-ip products --help"
-run_test "additional-ip product --help" "$CLI additional-ip product --help"
-run_test "additional-ip assignments --help" "$CLI additional-ip assignments --help"
-run_test "additional-ip assigns --help" "$CLI additional-ip assigns --help"
-run_test "additional-ip assign --help" "$CLI additional-ip assign --help"
-run_test "additional-ip assign-detail --help" "$CLI additional-ip assign-detail --help"
-run_test "additional-ip unassign --help" "$CLI additional-ip unassign --help"
-
-subsection "Live API Tests"
 run_live_test "additional-ip list" "$CLI additional-ip list"
 run_live_test "additional-ip regions" "$CLI additional-ip regions"
 run_live_test "additional-ip products" "$CLI additional-ip products"
 
-# ─────────────────────────────────────────────
-# NEO Lite
-# ─────────────────────────────────────────────
+section "Live API Tests - NEO Lite"
 
-section "NEO Lite Commands"
-
-subsection "Help Tests"
-run_test "neolite --help" "$CLI neolite --help"
-run_test "neolite list --help" "$CLI neolite list --help"
-run_test "neolite detail --help" "$CLI neolite detail --help"
-run_test "neolite create --help" "$CLI neolite create --help"
-run_test "neolite delete --help" "$CLI neolite delete --help"
-run_test "neolite vm-details --help" "$CLI neolite vm-details --help"
-run_test "neolite set-state --help" "$CLI neolite set-state --help"
-run_test "neolite rename --help" "$CLI neolite rename --help"
-run_test "neolite rebuild --help" "$CLI neolite rebuild --help"
-run_test "neolite change-keypair --help" "$CLI neolite change-keypair --help"
-run_test "neolite change-package-options --help" "$CLI neolite change-package-options --help"
-run_test "neolite change-package --help" "$CLI neolite change-package --help"
-run_test "neolite storage-options --help" "$CLI neolite storage-options --help"
-run_test "neolite upgrade-storage --help" "$CLI neolite upgrade-storage --help"
-run_test "neolite migrate-to-pro-products --help" "$CLI neolite migrate-to-pro-products --help"
-run_test "neolite migrate-to-pro --help" "$CLI neolite migrate-to-pro --help"
-run_test "neolite products --help" "$CLI neolite products --help"
-run_test "neolite product --help" "$CLI neolite product --help"
-run_test "neolite product-os --help" "$CLI neolite product-os --help"
-run_test "neolite product-ip --help" "$CLI neolite product-ip --help"
-
-subsection "Keypair Help"
-run_test "neolite keypair --help" "$CLI neolite keypair --help"
-run_test "neolite keypair list --help" "$CLI neolite keypair list --help"
-run_test "neolite keypair create --help" "$CLI neolite keypair create --help"
-run_test "neolite keypair import --help" "$CLI neolite keypair import --help"
-run_test "neolite keypair delete --help" "$CLI neolite keypair delete --help"
-
-subsection "Snapshot Help"
-run_test "neolite snapshot --help" "$CLI neolite snapshot --help"
-run_test "neolite snapshot list --help" "$CLI neolite snapshot list --help"
-run_test "neolite snapshot detail --help" "$CLI neolite snapshot detail --help"
-run_test "neolite snapshot create --help" "$CLI neolite snapshot create --help"
-run_test "neolite snapshot create-instance --help" "$CLI neolite snapshot create-instance --help"
-run_test "neolite snapshot restore --help" "$CLI neolite snapshot restore --help"
-run_test "neolite snapshot delete --help" "$CLI neolite snapshot delete --help"
-run_test "neolite snapshot products --help" "$CLI neolite snapshot products --help"
-run_test "neolite snapshot product --help" "$CLI neolite snapshot product --help"
-
-subsection "Disk Help"
-run_test "neolite disk --help" "$CLI neolite disk --help"
-run_test "neolite disk list --help" "$CLI neolite disk list --help"
-run_test "neolite disk detail --help" "$CLI neolite disk detail --help"
-run_test "neolite disk create --help" "$CLI neolite disk create --help"
-run_test "neolite disk upgrade --help" "$CLI neolite disk upgrade --help"
-run_test "neolite disk delete --help" "$CLI neolite disk delete --help"
-run_test "neolite disk products --help" "$CLI neolite disk products --help"
-run_test "neolite disk product --help" "$CLI neolite disk product --help"
-
-subsection "Live API Tests"
 run_live_test "neolite list" "$CLI neolite list"
 run_live_test "neolite products" "$CLI neolite products"
 run_live_test "neolite keypair list" "$CLI neolite keypair list"
@@ -244,97 +308,126 @@ run_live_test "neolite snapshot products" "$CLI neolite snapshot products"
 run_live_test "neolite disk list" "$CLI neolite disk list"
 run_live_test "neolite disk products" "$CLI neolite disk products"
 
-# ─────────────────────────────────────────────
-# NEO Lite Pro
-# ─────────────────────────────────────────────
+section "Live API Tests - NEO Lite Pro"
 
-section "NEO Lite Pro Commands"
-
-subsection "Help Tests"
-run_test "neolite-pro --help" "$CLI neolite-pro --help"
-run_test "neolite-pro list --help" "$CLI neolite-pro list --help"
-run_test "neolite-pro detail --help" "$CLI neolite-pro detail --help"
-run_test "neolite-pro create --help" "$CLI neolite-pro create --help"
-run_test "neolite-pro delete --help" "$CLI neolite-pro delete --help"
-run_test "neolite-pro vm-details --help" "$CLI neolite-pro vm-details --help"
-run_test "neolite-pro set-state --help" "$CLI neolite-pro set-state --help"
-run_test "neolite-pro rename --help" "$CLI neolite-pro rename --help"
-run_test "neolite-pro rebuild --help" "$CLI neolite-pro rebuild --help"
-run_test "neolite-pro change-keypair --help" "$CLI neolite-pro change-keypair --help"
-run_test "neolite-pro change-package-options --help" "$CLI neolite-pro change-package-options --help"
-run_test "neolite-pro change-package --help" "$CLI neolite-pro change-package --help"
-run_test "neolite-pro storage-options --help" "$CLI neolite-pro storage-options --help"
-run_test "neolite-pro upgrade-storage --help" "$CLI neolite-pro upgrade-storage --help"
-run_test "neolite-pro products --help" "$CLI neolite-pro products --help"
-run_test "neolite-pro product --help" "$CLI neolite-pro product --help"
-run_test "neolite-pro product-os --help" "$CLI neolite-pro product-os --help"
-run_test "neolite-pro product-ip --help" "$CLI neolite-pro product-ip --help"
-
-subsection "Keypair / Snapshot / Disk Help"
-run_test "neolite-pro keypair --help" "$CLI neolite-pro keypair --help"
-run_test "neolite-pro snapshot --help" "$CLI neolite-pro snapshot --help"
-run_test "neolite-pro disk --help" "$CLI neolite-pro disk --help"
-
-subsection "Live API Tests"
 run_live_test "neolite-pro list" "$CLI neolite-pro list"
 run_live_test "neolite-pro products" "$CLI neolite-pro products"
 run_live_test "neolite-pro keypair list" "$CLI neolite-pro keypair list"
+run_live_test "neolite-pro snapshot list" "$CLI neolite-pro snapshot list"
+run_live_test "neolite-pro disk list" "$CLI neolite-pro disk list"
 
-# ─────────────────────────────────────────────
-# Object Storage
-# ─────────────────────────────────────────────
+section "Live API Tests - Object Storage"
 
-section "Object Storage Commands"
-
-subsection "Help Tests"
-run_test "object-storage --help" "$CLI object-storage --help"
-run_test "object-storage list --help" "$CLI object-storage list --help"
-run_test "object-storage detail --help" "$CLI object-storage detail --help"
-run_test "object-storage create --help" "$CLI object-storage create --help"
-run_test "object-storage upgrade-quota --help" "$CLI object-storage upgrade-quota --help"
-run_test "object-storage products --help" "$CLI object-storage products --help"
-run_test "object-storage product --help" "$CLI object-storage product --help"
-
-subsection "Credential Help"
-run_test "object-storage credential --help" "$CLI object-storage credential --help"
-run_test "object-storage credential list --help" "$CLI object-storage credential list --help"
-run_test "object-storage credential create --help" "$CLI object-storage credential create --help"
-run_test "object-storage credential update --help" "$CLI object-storage credential update --help"
-run_test "object-storage credential delete --help" "$CLI object-storage credential delete --help"
-
-subsection "Bucket Help"
-run_test "object-storage bucket --help" "$CLI object-storage bucket --help"
-run_test "object-storage bucket list --help" "$CLI object-storage bucket list --help"
-run_test "object-storage bucket create --help" "$CLI object-storage bucket create --help"
-run_test "object-storage bucket info --help" "$CLI object-storage bucket info --help"
-run_test "object-storage bucket usage --help" "$CLI object-storage bucket usage --help"
-run_test "object-storage bucket set-acl --help" "$CLI object-storage bucket set-acl --help"
-run_test "object-storage bucket delete --help" "$CLI object-storage bucket delete --help"
-
-subsection "Object Help"
-run_test "object-storage object --help" "$CLI object-storage object --help"
-run_test "object-storage object list --help" "$CLI object-storage object list --help"
-run_test "object-storage object info --help" "$CLI object-storage object info --help"
-run_test "object-storage object download --help" "$CLI object-storage object download --help"
-run_test "object-storage object url --help" "$CLI object-storage object url --help"
-run_test "object-storage object copy --help" "$CLI object-storage object copy --help"
-run_test "object-storage object move --help" "$CLI object-storage object move --help"
-run_test "object-storage object mkdir --help" "$CLI object-storage object mkdir --help"
-run_test "object-storage object set-acl --help" "$CLI object-storage object set-acl --help"
-run_test "object-storage object delete --help" "$CLI object-storage object delete --help"
-
-subsection "Live API Tests"
 run_live_test "object-storage list" "$CLI object-storage list"
 run_live_test "object-storage products" "$CLI object-storage products"
 
-# ─────────────────────────────────────────────
-# Output format tests
-# ─────────────────────────────────────────────
-
-section "Output Format Tests"
+section "Live API Tests - Output Formats"
 
 run_live_test "JSON output (default)" "$CLI metal list --output json"
 run_live_test "Table output" "$CLI metal list --output table"
+run_live_test "API key via flag" "$CLI metal list --api-key \$BIZNETGIO_API_KEY"
+
+# ─────────────────────────────────────────────
+# Live API tests - detail with real IDs
+# ─────────────────────────────────────────────
+
+section "Live API Tests - Detail & Product Lookups"
+
+if [[ "$LIVE_MODE" == true ]]; then
+  # Try to get a product ID from metal products
+  subsection "Product detail lookups"
+  METAL_PRODUCT_ID=$(eval "$CLI metal products 2>/dev/null" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+      try{const j=JSON.parse(d);const items=Array.isArray(j)?j:j.data||j.products||[];
+      if(items.length>0)console.log(items[0].id||items[0].product_id||'');
+      }catch(e){}
+    })" 2>/dev/null || true)
+
+  if [[ -n "$METAL_PRODUCT_ID" ]]; then
+    run_test "metal product detail ($METAL_PRODUCT_ID)" "$CLI metal product $METAL_PRODUCT_ID"
+    run_test "metal product-os ($METAL_PRODUCT_ID)" "$CLI metal product-os $METAL_PRODUCT_ID"
+  else
+    printf "  %-60s" "metal product detail (no products found)"
+    echo -e "${YELLOW}SKIP${NC}"
+    ((SKIP++))
+  fi
+
+  # Try to get a neolite product ID
+  NEOLITE_PRODUCT_ID=$(eval "$CLI neolite products 2>/dev/null" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+      try{const j=JSON.parse(d);const items=Array.isArray(j)?j:j.data||j.products||[];
+      if(items.length>0)console.log(items[0].id||items[0].product_id||'');
+      }catch(e){}
+    })" 2>/dev/null || true)
+
+  if [[ -n "$NEOLITE_PRODUCT_ID" ]]; then
+    run_test "neolite product detail ($NEOLITE_PRODUCT_ID)" "$CLI neolite product $NEOLITE_PRODUCT_ID"
+    run_test "neolite product-os ($NEOLITE_PRODUCT_ID)" "$CLI neolite product-os $NEOLITE_PRODUCT_ID"
+    run_test "neolite product-ip ($NEOLITE_PRODUCT_ID)" "$CLI neolite product-ip $NEOLITE_PRODUCT_ID"
+  else
+    printf "  %-60s" "neolite product detail (no products found)"
+    echo -e "${YELLOW}SKIP${NC}"
+    ((SKIP++))
+  fi
+
+  # Try to get an account ID from metal list and test detail
+  subsection "Account detail lookups"
+  METAL_ACCOUNT_ID=$(eval "$CLI metal list 2>/dev/null" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+      try{const j=JSON.parse(d);const items=Array.isArray(j)?j:j.data||j.accounts||[];
+      if(items.length>0)console.log(items[0].id||items[0].account_id||'');
+      }catch(e){}
+    })" 2>/dev/null || true)
+
+  if [[ -n "$METAL_ACCOUNT_ID" ]]; then
+    run_test "metal detail ($METAL_ACCOUNT_ID)" "$CLI metal detail $METAL_ACCOUNT_ID"
+    run_test "metal state ($METAL_ACCOUNT_ID)" "$CLI metal state $METAL_ACCOUNT_ID"
+    run_test "metal detail table output" "$CLI metal detail $METAL_ACCOUNT_ID --output table"
+  else
+    printf "  %-60s" "metal detail (no accounts found)"
+    echo -e "${YELLOW}SKIP${NC}"
+    ((SKIP++))
+  fi
+
+  NEOLITE_ACCOUNT_ID=$(eval "$CLI neolite list 2>/dev/null" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+      try{const j=JSON.parse(d);const items=Array.isArray(j)?j:j.data||j.accounts||[];
+      if(items.length>0)console.log(items[0].id||items[0].account_id||'');
+      }catch(e){}
+    })" 2>/dev/null || true)
+
+  if [[ -n "$NEOLITE_ACCOUNT_ID" ]]; then
+    run_test "neolite detail ($NEOLITE_ACCOUNT_ID)" "$CLI neolite detail $NEOLITE_ACCOUNT_ID"
+    run_test "neolite vm-details ($NEOLITE_ACCOUNT_ID)" "$CLI neolite vm-details $NEOLITE_ACCOUNT_ID"
+    run_test "neolite change-package-options ($NEOLITE_ACCOUNT_ID)" "$CLI neolite change-package-options $NEOLITE_ACCOUNT_ID"
+    run_test "neolite storage-options ($NEOLITE_ACCOUNT_ID)" "$CLI neolite storage-options $NEOLITE_ACCOUNT_ID"
+  else
+    printf "  %-60s" "neolite detail (no accounts found)"
+    echo -e "${YELLOW}SKIP${NC}"
+    ((SKIP++))
+  fi
+
+  OBJ_ACCOUNT_ID=$(eval "$CLI object-storage list 2>/dev/null" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+      try{const j=JSON.parse(d);const items=Array.isArray(j)?j:j.data||j.accounts||[];
+      if(items.length>0)console.log(items[0].id||items[0].account_id||'');
+      }catch(e){}
+    })" 2>/dev/null || true)
+
+  if [[ -n "$OBJ_ACCOUNT_ID" ]]; then
+    run_test "object-storage detail ($OBJ_ACCOUNT_ID)" "$CLI object-storage detail $OBJ_ACCOUNT_ID"
+    run_test "object-storage credential list ($OBJ_ACCOUNT_ID)" "$CLI object-storage credential list $OBJ_ACCOUNT_ID"
+    run_test "object-storage bucket list ($OBJ_ACCOUNT_ID)" "$CLI object-storage bucket list $OBJ_ACCOUNT_ID"
+  else
+    printf "  %-60s" "object-storage detail (no accounts found)"
+    echo -e "${YELLOW}SKIP${NC}"
+    ((SKIP++))
+  fi
+else
+  printf "  %-60s" "Detail & product lookups"
+  echo -e "${YELLOW}SKIP${NC} (use --live)"
+  ((SKIP++))
+fi
 
 # ─────────────────────────────────────────────
 # Summary

@@ -1,4 +1,4 @@
-const BASE_URL = 'https://api.portal.biznetgio.com/v1';
+const BASE_URL = process.env.BIZNETGIO_BASE_URL || 'https://api.portal.biznetgio.com/v1';
 
 export function getApiKey(cmdOpts) {
   const key = cmdOpts?.apiKey || process.env.BIZNETGIO_API_KEY;
