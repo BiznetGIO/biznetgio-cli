@@ -1,19 +1,34 @@
 #!/usr/bin/env bash
 #
-# Test script untuk mcp-server
-# Menguji MCP server initialization, tool listing, dan live tool calls
+# Comprehensive test script for @biznetgio/mcp
+# Loads .env for staging base URL and API key
 #
 # Usage:
-#   ./scripts/test-mcp.sh              # Test startup + tool listing
-#   ./scripts/test-mcp.sh --live       # Test startup + tool listing + live API calls
+#   ./scripts/test-mcp.sh
 #
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MCP_DIR="$PROJECT_DIR/mcp-server"
 MCP_SERVER="node $MCP_DIR/src/index.js"
+ENV_FILE="$PROJECT_DIR/.env"
+
+# Load .env
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "Error: .env file not found at $ENV_FILE"
+  exit 1
+fi
+
+if [[ -z "${BIZNETGIO_API_KEY:-}" ]]; then
+  echo "Error: BIZNETGIO_API_KEY not set in .env"
+  exit 1
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -26,38 +41,23 @@ BOLD='\033[1m'
 PASS=0
 FAIL=0
 SKIP=0
-LIVE_MODE=false
 ERRORS=()
-
-if [[ "${1:-}" == "--live" ]]; then
-  LIVE_MODE=true
-  if [[ -z "${BIZNETGIO_API_KEY:-}" ]]; then
-    echo -e "${RED}Error: BIZNETGIO_API_KEY not set. Required for --live mode.${NC}"
-    exit 1
-  fi
-fi
 
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
 
-# Send a JSON-RPC message to the MCP server and capture response
-mcp_call() {
-  local input="$1"
-  echo "$input" | timeout 10 $MCP_SERVER 2>/dev/null | head -1
-}
-
-# Send initialize + request in sequence
+# Send initialize + request to MCP server
 mcp_request() {
   local method="$1"
   local params="${2:-{}}"
   local id="${3:-2}"
 
-  local init_msg='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
-  local init_notif='{"jsonrpc":"2.0","method":"notifications/initialized"}'
-  local request_msg="{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\",\"params\":$params}"
+  local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+  local notif='{"jsonrpc":"2.0","method":"notifications/initialized"}'
+  local req="{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\",\"params\":$params}"
 
-  printf '%s\n%s\n%s\n' "$init_msg" "$init_notif" "$request_msg" | timeout 15 $MCP_SERVER 2>/dev/null
+  printf '%s\n%s\n%s\n' "$init" "$notif" "$req" | timeout 15 $MCP_SERVER 2>/dev/null
 }
 
 run_test() {
@@ -65,27 +65,68 @@ run_test() {
   shift
   local cmd="$*"
 
-  printf "  %-60s" "$description"
+  printf "  %-65s" "$description"
   if output=$(eval "$cmd" 2>&1); then
     echo -e "${GREEN}PASS${NC}"
     ((PASS++))
     return 0
   else
     echo -e "${RED}FAIL${NC}"
-    ERRORS+=("$description: $cmd\n  Output: $output")
+    ERRORS+=("$description\n    cmd: $cmd\n    out: $output")
     ((FAIL++))
     return 1
   fi
 }
 
-run_live_test() {
-  if [[ "$LIVE_MODE" != true ]]; then
-    printf "  %-60s" "$1"
-    echo -e "${YELLOW}SKIP${NC} (use --live)"
-    ((SKIP++))
+run_contains_test() {
+  local description="$1"
+  local expected="$2"
+  shift 2
+  local cmd="$*"
+
+  printf "  %-65s" "$description"
+  output=$(eval "$cmd" 2>&1) || true
+  if echo "$output" | grep -q "$expected"; then
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
     return 0
+  else
+    echo -e "${RED}FAIL${NC}"
+    ERRORS+=("$description\n    expected: '$expected'\n    got: $(echo "$output" | head -3)")
+    ((FAIL++))
+    return 1
   fi
-  run_test "$@"
+}
+
+# Call a tool and check that response contains "content"
+run_tool_test() {
+  local description="$1"
+  local tool_name="$2"
+  local args="${3:-{}}"
+
+  printf "  %-65s" "$description"
+  local response
+  response=$(mcp_request "tools/call" "{\"name\":\"$tool_name\",\"arguments\":$args}" 3 2>/dev/null || true)
+  local last_line
+  last_line=$(echo "$response" | tail -1)
+  if echo "$last_line" | grep -q '"content"'; then
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+    return 0
+  else
+    echo -e "${RED}FAIL${NC}"
+    ERRORS+=("$description (tool: $tool_name)\n    response: $(echo "$last_line" | head -1)")
+    ((FAIL++))
+    return 1
+  fi
+}
+
+skip_test() {
+  local description="$1"
+  local reason="${2:-no data}"
+  printf "  %-65s" "$description"
+  echo -e "${YELLOW}SKIP${NC} ($reason)"
+  ((SKIP++))
 }
 
 section() {
@@ -93,60 +134,72 @@ section() {
   echo -e "${CYAN}${BOLD}━━━ $1 ━━━${NC}"
 }
 
+subsection() {
+  echo -e "  ${BOLD}── $1${NC}"
+}
+
+echo -e "${CYAN}${BOLD}"
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║    @biznetgio/mcp - Comprehensive Test Suite            ║"
+echo "╚══════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
+echo -e "  Base URL: ${BOLD}${BIZNETGIO_BASE_URL:-https://api.portal.biznetgio.com/v1}${NC}"
+
 # ─────────────────────────────────────────────
-# Pre-flight checks
+# 1. Pre-flight
 # ─────────────────────────────────────────────
 
-section "Pre-flight Checks"
+section "1. Pre-flight Checks"
 
-run_test "Node.js is available" "node --version"
-run_test "MCP server entry point exists" "test -f $MCP_DIR/src/index.js"
+run_test "Node.js available" "node --version"
+run_test "MCP entry point exists" "test -f $MCP_DIR/src/index.js"
 run_test "Dependencies installed" "test -d $MCP_DIR/node_modules"
-run_test "Client module exists" "test -f $MCP_DIR/src/client.js"
-run_test "Metal tools exist" "test -f $MCP_DIR/src/tools/metal.js"
-run_test "Elastic storage tools exist" "test -f $MCP_DIR/src/tools/elastic-storage.js"
-run_test "Additional IP tools exist" "test -f $MCP_DIR/src/tools/additional-ip.js"
-run_test "Neolite tools exist" "test -f $MCP_DIR/src/tools/neolite.js"
-run_test "Neolite Pro tools exist" "test -f $MCP_DIR/src/tools/neolite-pro.js"
-run_test "Object storage tools exist" "test -f $MCP_DIR/src/tools/object-storage.js"
+run_test "All tool modules exist" \
+  "test -f $MCP_DIR/src/tools/metal.js && \
+   test -f $MCP_DIR/src/tools/elastic-storage.js && \
+   test -f $MCP_DIR/src/tools/additional-ip.js && \
+   test -f $MCP_DIR/src/tools/neolite.js && \
+   test -f $MCP_DIR/src/tools/neolite-pro.js && \
+   test -f $MCP_DIR/src/tools/object-storage.js"
 
 # ─────────────────────────────────────────────
-# MCP Initialize
+# 2. MCP Initialize
 # ─────────────────────────────────────────────
 
-section "MCP Server Initialization"
+section "2. MCP Server Initialization"
 
-run_test "Server responds to initialize" \
-  "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0.0\"}}}' | timeout 5 $MCP_SERVER 2>/dev/null | grep -q '\"serverInfo\"'"
+INIT_RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | timeout 5 $MCP_SERVER 2>/dev/null || true)
 
-run_test "Server name is 'biznetgio'" \
-  "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0.0\"}}}' | timeout 5 $MCP_SERVER 2>/dev/null | grep -q '\"name\":\"biznetgio\"'"
-
-run_test "Server version is '1.0.0'" \
-  "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0.0\"}}}' | timeout 5 $MCP_SERVER 2>/dev/null | grep -q '\"version\":\"1.0.0\"'"
-
-run_test "Server supports tools capability" \
-  "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0.0\"}}}' | timeout 5 $MCP_SERVER 2>/dev/null | grep -q '\"tools\"'"
+run_contains_test "Server responds to initialize" "serverInfo" "echo '$INIT_RESPONSE'"
+run_contains_test "Server name is 'biznetgio'" "\"name\":\"biznetgio\"" "echo '$INIT_RESPONSE'"
+run_contains_test "Server version is '1.0.0'" "\"version\":\"1.0.0\"" "echo '$INIT_RESPONSE'"
+run_contains_test "Server supports tools capability" "\"tools\"" "echo '$INIT_RESPONSE'"
 
 # ─────────────────────────────────────────────
-# Tool Listing
+# 3. Tool listing
 # ─────────────────────────────────────────────
 
-section "MCP Tool Listing"
+section "3. Tool Listing"
 
-# Get the tools list response
 TOOLS_RESPONSE=$(mcp_request "tools/list" '{}' 2 2>/dev/null || true)
-
-# Extract the last line (tools/list response)
 TOOLS_LINE=$(echo "$TOOLS_RESPONSE" | tail -1)
 
-run_test "tools/list returns result" \
-  "echo '$TOOLS_LINE' | grep -q '\"tools\"'"
+run_contains_test "tools/list returns tools array" "\"tools\"" "echo '$TOOLS_LINE'"
 
-# Check specific tools exist
+# Count tools
+TOOL_COUNT=$(echo "$TOOLS_LINE" | grep -o '"name":' | wc -l | tr -d ' ')
+printf "  %-65s" "Total tools registered: $TOOL_COUNT"
+if [[ "$TOOL_COUNT" -gt 100 ]]; then
+  echo -e "${GREEN}PASS${NC} (>100)"
+  ((PASS++))
+else
+  echo -e "${RED}FAIL${NC} (expected >100, got $TOOL_COUNT)"
+  ((FAIL++))
+fi
+
 check_tool() {
   local tool_name="$1"
-  printf "  %-60s" "Tool exists: $tool_name"
+  printf "  %-65s" "Tool: $tool_name"
   if echo "$TOOLS_LINE" | grep -q "\"name\":\"$tool_name\""; then
     echo -e "${GREEN}PASS${NC}"
     ((PASS++))
@@ -157,163 +210,91 @@ check_tool() {
   fi
 }
 
-echo -e "  ${BOLD}── NEO Metal Tools${NC}"
-check_tool "metal_list"
-check_tool "metal_detail"
-check_tool "metal_create"
-check_tool "metal_delete"
-check_tool "metal_update_label"
-check_tool "metal_state"
-check_tool "metal_set_state"
-check_tool "metal_rebuild"
-check_tool "metal_openvpn"
-check_tool "metal_products"
-check_tool "metal_product_detail"
-check_tool "metal_product_os"
-check_tool "metal_rebuild_os"
-check_tool "metal_states"
-check_tool "metal_keypair_list"
-check_tool "metal_keypair_create"
-check_tool "metal_keypair_import"
-check_tool "metal_keypair_delete"
+subsection "NEO Metal tools"
+for t in metal_list metal_detail metal_create metal_delete metal_update_label metal_state metal_set_state metal_rebuild metal_openvpn metal_products metal_product_detail metal_product_os metal_rebuild_os metal_states metal_keypair_list metal_keypair_create metal_keypair_import metal_keypair_delete; do
+  check_tool "$t"
+done
 
-echo -e "  ${BOLD}── Elastic Storage Tools${NC}"
-check_tool "elastic_storage_list"
-check_tool "elastic_storage_detail"
-check_tool "elastic_storage_create"
-check_tool "elastic_storage_upgrade"
-check_tool "elastic_storage_change_package"
-check_tool "elastic_storage_delete"
-check_tool "elastic_storage_products"
-check_tool "elastic_storage_product_detail"
+subsection "Elastic Storage tools"
+for t in elastic_storage_list elastic_storage_detail elastic_storage_create elastic_storage_upgrade elastic_storage_change_package elastic_storage_delete elastic_storage_products elastic_storage_product_detail; do
+  check_tool "$t"
+done
 
-echo -e "  ${BOLD}── Additional IP Tools${NC}"
-check_tool "additional_ip_list"
-check_tool "additional_ip_detail"
-check_tool "additional_ip_create"
-check_tool "additional_ip_delete"
-check_tool "additional_ip_regions"
-check_tool "additional_ip_products"
-check_tool "additional_ip_product_detail"
-check_tool "additional_ip_assignments"
-check_tool "additional_ip_assigns"
-check_tool "additional_ip_assign"
-check_tool "additional_ip_assign_detail"
-check_tool "additional_ip_unassign"
+subsection "Additional IP tools"
+for t in additional_ip_list additional_ip_detail additional_ip_create additional_ip_delete additional_ip_regions additional_ip_products additional_ip_product_detail additional_ip_assignments additional_ip_assigns additional_ip_assign additional_ip_assign_detail additional_ip_unassign; do
+  check_tool "$t"
+done
 
-echo -e "  ${BOLD}── NEO Lite Tools${NC}"
-check_tool "neolite_list"
-check_tool "neolite_detail"
-check_tool "neolite_create"
-check_tool "neolite_delete"
-check_tool "neolite_vm_details"
-check_tool "neolite_set_state"
-check_tool "neolite_rename"
-check_tool "neolite_rebuild"
-check_tool "neolite_change_keypair"
-check_tool "neolite_change_package"
-check_tool "neolite_upgrade_storage"
-check_tool "neolite_products"
-check_tool "neolite_product_detail"
-check_tool "neolite_product_os"
-check_tool "neolite_product_ip"
-check_tool "neolite_keypair_list"
-check_tool "neolite_snapshot_list"
-check_tool "neolite_snapshot_create"
-check_tool "neolite_disk_list"
-check_tool "neolite_disk_create"
+subsection "NEO Lite tools (sample)"
+for t in neolite_list neolite_detail neolite_create neolite_delete neolite_vm_details neolite_set_state neolite_rename neolite_rebuild neolite_change_keypair neolite_change_package neolite_upgrade_storage neolite_products neolite_product_detail neolite_product_os neolite_product_ip neolite_keypair_list neolite_snapshot_list neolite_snapshot_create neolite_disk_list neolite_disk_create; do
+  check_tool "$t"
+done
 
-echo -e "  ${BOLD}── NEO Lite Pro Tools${NC}"
-check_tool "neolite_pro_list"
-check_tool "neolite_pro_detail"
-check_tool "neolite_pro_create"
-check_tool "neolite_pro_delete"
-check_tool "neolite_pro_set_state"
-check_tool "neolite_pro_products"
-check_tool "neolite_pro_keypair_list"
-check_tool "neolite_pro_snapshot_list"
-check_tool "neolite_pro_disk_list"
+subsection "NEO Lite Pro tools (sample)"
+for t in neolite_pro_list neolite_pro_detail neolite_pro_create neolite_pro_delete neolite_pro_set_state neolite_pro_products neolite_pro_keypair_list neolite_pro_snapshot_list neolite_pro_disk_list; do
+  check_tool "$t"
+done
 
-echo -e "  ${BOLD}── Object Storage Tools${NC}"
-check_tool "object_storage_list"
-check_tool "object_storage_detail"
-check_tool "object_storage_create"
-check_tool "object_storage_upgrade_quota"
-check_tool "object_storage_products"
-check_tool "object_storage_product_detail"
-check_tool "object_storage_credential_list"
-check_tool "object_storage_credential_create"
-check_tool "object_storage_credential_update"
-check_tool "object_storage_credential_delete"
-check_tool "object_storage_bucket_list"
-check_tool "object_storage_bucket_create"
-check_tool "object_storage_bucket_info"
-check_tool "object_storage_bucket_usage"
-check_tool "object_storage_bucket_set_acl"
-check_tool "object_storage_bucket_delete"
-check_tool "object_storage_object_list"
-check_tool "object_storage_object_info"
-check_tool "object_storage_object_download"
-check_tool "object_storage_object_url"
-check_tool "object_storage_object_copy"
-check_tool "object_storage_object_move"
-check_tool "object_storage_object_mkdir"
-check_tool "object_storage_object_set_acl"
-check_tool "object_storage_object_delete"
-
-# Count total tools
-TOOL_COUNT=$(echo "$TOOLS_LINE" | grep -o '"name":' | wc -l | tr -d ' ')
-echo ""
-echo -e "  ${BOLD}Total tools registered: $TOOL_COUNT${NC}"
+subsection "Object Storage tools (sample)"
+for t in object_storage_list object_storage_detail object_storage_create object_storage_upgrade_quota object_storage_products object_storage_product_detail object_storage_credential_list object_storage_credential_create object_storage_credential_update object_storage_credential_delete object_storage_bucket_list object_storage_bucket_create object_storage_bucket_info object_storage_bucket_usage object_storage_bucket_set_acl object_storage_bucket_delete object_storage_object_list object_storage_object_info object_storage_object_download object_storage_object_url object_storage_object_copy object_storage_object_move object_storage_object_mkdir object_storage_object_set_acl object_storage_object_delete; do
+  check_tool "$t"
+done
 
 # ─────────────────────────────────────────────
-# Live Tool Calls
+# 4. Live tool calls - read only
 # ─────────────────────────────────────────────
 
-section "Live MCP Tool Calls"
+section "4. Live Tool Calls - NEO Metal"
 
-call_tool() {
-  local tool_name="$1"
-  local args="${2:-{}}"
-  local response
-  response=$(mcp_request "tools/call" "{\"name\":\"$tool_name\",\"arguments\":$args}" 3 2>/dev/null || true)
-  local last_line
-  last_line=$(echo "$response" | tail -1)
-  if echo "$last_line" | grep -q '"content"'; then
-    return 0
-  else
-    return 1
-  fi
-}
+run_tool_test "metal_list" "metal_list"
+run_tool_test "metal_products" "metal_products"
+run_tool_test "metal_states" "metal_states"
+run_tool_test "metal_keypair_list" "metal_keypair_list"
+run_tool_test "metal_openvpn" "metal_openvpn"
 
-run_live_test "Call metal_list" "call_tool metal_list"
-run_live_test "Call metal_products" "call_tool metal_products"
-run_live_test "Call metal_states" "call_tool metal_states"
-run_live_test "Call metal_keypair_list" "call_tool metal_keypair_list"
-run_live_test "Call elastic_storage_list" "call_tool elastic_storage_list"
-run_live_test "Call elastic_storage_products" "call_tool elastic_storage_products"
-run_live_test "Call additional_ip_list" "call_tool additional_ip_list"
-run_live_test "Call additional_ip_regions" "call_tool additional_ip_regions"
-run_live_test "Call additional_ip_products" "call_tool additional_ip_products"
-run_live_test "Call neolite_list" "call_tool neolite_list"
-run_live_test "Call neolite_products" "call_tool neolite_products"
-run_live_test "Call neolite_keypair_list" "call_tool neolite_keypair_list"
-run_live_test "Call neolite_snapshot_list" "call_tool neolite_snapshot_list"
-run_live_test "Call neolite_disk_list" "call_tool neolite_disk_list"
-run_live_test "Call neolite_disk_products" "call_tool neolite_disk_products"
-run_live_test "Call neolite_pro_list" "call_tool neolite_pro_list"
-run_live_test "Call neolite_pro_products" "call_tool neolite_pro_products"
-run_live_test "Call object_storage_list" "call_tool object_storage_list"
-run_live_test "Call object_storage_products" "call_tool object_storage_products"
+section "5. Live Tool Calls - Elastic Storage"
+
+run_tool_test "elastic_storage_list" "elastic_storage_list"
+run_tool_test "elastic_storage_products" "elastic_storage_products"
+
+section "6. Live Tool Calls - Additional IP"
+
+run_tool_test "additional_ip_list" "additional_ip_list"
+run_tool_test "additional_ip_regions" "additional_ip_regions"
+run_tool_test "additional_ip_products" "additional_ip_products"
+
+section "7. Live Tool Calls - NEO Lite"
+
+run_tool_test "neolite_list" "neolite_list"
+run_tool_test "neolite_products" "neolite_products"
+run_tool_test "neolite_keypair_list" "neolite_keypair_list"
+run_tool_test "neolite_snapshot_list" "neolite_snapshot_list"
+run_tool_test "neolite_snapshot_products" "neolite_snapshot_products"
+run_tool_test "neolite_disk_list" "neolite_disk_list"
+run_tool_test "neolite_disk_products" "neolite_disk_products"
+
+section "8. Live Tool Calls - NEO Lite Pro"
+
+run_tool_test "neolite_pro_list" "neolite_pro_list"
+run_tool_test "neolite_pro_products" "neolite_pro_products"
+run_tool_test "neolite_pro_keypair_list" "neolite_pro_keypair_list"
+run_tool_test "neolite_pro_snapshot_list" "neolite_pro_snapshot_list"
+run_tool_test "neolite_pro_disk_list" "neolite_pro_disk_list"
+run_tool_test "neolite_pro_disk_products" "neolite_pro_disk_products"
+
+section "9. Live Tool Calls - Object Storage"
+
+run_tool_test "object_storage_list" "object_storage_list"
+run_tool_test "object_storage_products" "object_storage_products"
 
 # ─────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────
 
 echo ""
-echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BOLD}Test Results${NC}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "  ${GREEN}PASS${NC}: $PASS"
 echo -e "  ${RED}FAIL${NC}: $FAIL"
 echo -e "  ${YELLOW}SKIP${NC}: $SKIP"

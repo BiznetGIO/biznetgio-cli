@@ -16,7 +16,7 @@ program
   .description('CLI tool for Biznet Gio Portal API')
   .version('1.0.0')
   .option('--api-key <key>', 'API key (overrides BIZNETGIO_API_KEY env)')
-  .option('--output <format>', 'Output format: json or table', 'json');
+  .option('--output <format>', 'Output format: table or json', 'table');
 
 registerMetalCommands(program);
 registerElasticStorageCommands(program);

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Run all tests for biznetgio-cli and biznetgio-mcp-server
+# Run all tests for @biznetgio/cli and @biznetgio/mcp
+# Loads .env automatically for staging tests
 #
 # Usage:
-#   ./scripts/test-all.sh              # Help-only tests (no API key needed)
-#   ./scripts/test-all.sh --live       # Full tests with live API calls
+#   ./scripts/test-all.sh
 #
 
 set -uo pipefail
@@ -17,13 +17,12 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-LIVE_FLAG="${1:-}"
 EXIT_CODE=0
 
 echo -e "${CYAN}${BOLD}"
-echo "╔══════════════════════════════════════════════╗"
-echo "║    Biznet Gio - Full Test Suite              ║"
-echo "╚══════════════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║    Biznet Gio - Full Test Suite                         ║"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
 # ─────────────────────────────────────────────
@@ -32,7 +31,7 @@ echo -e "${NC}"
 
 echo -e "${CYAN}${BOLD}▶ Running CLI Tests...${NC}"
 echo ""
-if bash "$SCRIPT_DIR/test-cli.sh" $LIVE_FLAG; then
+if bash "$SCRIPT_DIR/test-cli.sh"; then
   echo ""
   echo -e "${GREEN}${BOLD}✓ CLI tests passed${NC}"
 else
@@ -42,7 +41,7 @@ else
 fi
 
 echo ""
-echo -e "${CYAN}${BOLD}──────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD}──────────────────────────────────────────────────────────${NC}"
 echo ""
 
 # ─────────────────────────────────────────────
@@ -51,7 +50,7 @@ echo ""
 
 echo -e "${CYAN}${BOLD}▶ Running MCP Server Tests...${NC}"
 echo ""
-if bash "$SCRIPT_DIR/test-mcp.sh" $LIVE_FLAG; then
+if bash "$SCRIPT_DIR/test-mcp.sh"; then
   echo ""
   echo -e "${GREEN}${BOLD}✓ MCP server tests passed${NC}"
 else
@@ -66,13 +65,13 @@ fi
 
 echo ""
 echo -e "${CYAN}${BOLD}"
-echo "╔══════════════════════════════════════════════╗"
+echo "╔══════════════════════════════════════════════════════════╗"
 if [[ $EXIT_CODE -eq 0 ]]; then
-  echo -e "║  ${GREEN}✓  ALL TEST SUITES PASSED                  ${CYAN}║"
+  echo -e "║  ${GREEN}✓  ALL TEST SUITES PASSED                              ${CYAN}║"
 else
-  echo -e "║  ${RED}✗  SOME TEST SUITES FAILED                 ${CYAN}║"
+  echo -e "║  ${RED}✗  SOME TEST SUITES FAILED                             ${CYAN}║"
 fi
-echo "╚══════════════════════════════════════════════╝"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
 exit $EXIT_CODE

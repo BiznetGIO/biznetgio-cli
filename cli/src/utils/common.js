@@ -4,8 +4,14 @@ export function withAuth(action) {
   return async function (...args) {
     const cmd = args[args.length - 1];
     const opts = cmd.opts ? cmd.opts() : cmd;
-    const parent = cmd.parent ? cmd.parent.opts() : {};
-    const merged = { ...parent, ...opts };
+    // Walk up the parent chain to collect all options (root has --output, --api-key)
+    const ancestors = {};
+    let p = cmd.parent;
+    while (p) {
+      Object.assign(ancestors, p.opts ? p.opts() : {});
+      p = p.parent;
+    }
+    const merged = { ...ancestors, ...opts };
     merged.apiKey = getApiKey(merged);
     try {
       await action(merged, ...args.slice(0, -1));

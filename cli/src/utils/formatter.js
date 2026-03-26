@@ -1,31 +1,53 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
 
+// Extract .data from API response wrapper {success, code, data}
+function extractData(data) {
+  if (data && typeof data === 'object' && !Array.isArray(data) && 'data' in data) {
+    return data.data;
+  }
+  return data;
+}
+
 export function output(data, opts = {}) {
-  const format = opts.output || 'json';
+  const format = opts.output || 'table';
+  const extracted = extractData(data);
 
   if (format === 'json') {
-    console.log(JSON.stringify(data, null, 2));
+    console.log(JSON.stringify(extracted, null, 2));
     return;
   }
 
   if (format === 'table') {
-    if (Array.isArray(data)) {
-      printTable(data);
-    } else if (typeof data === 'object' && data !== null) {
-      printObject(data);
+    if (extracted === null || extracted === undefined) {
+      console.log('No data found.');
+    } else if (Array.isArray(extracted)) {
+      printTable(extracted);
+    } else if (typeof extracted === 'object') {
+      printObject(extracted);
     } else {
-      console.log(data);
+      console.log(extracted);
     }
     return;
   }
 
-  console.log(JSON.stringify(data, null, 2));
+  console.log(JSON.stringify(extracted, null, 2));
 }
 
 function printTable(arr) {
   if (arr.length === 0) {
     console.log('No data found.');
+    return;
+  }
+
+  // If array of primitives (strings, numbers)
+  if (typeof arr[0] !== 'object') {
+    const table = new Table({
+      head: [chalk.cyan('#'), chalk.cyan('value')],
+      style: { head: [], border: [] },
+    });
+    arr.forEach((v, i) => table.push([i + 1, String(v)]));
+    console.log(table.toString());
     return;
   }
 
