@@ -6,8 +6,8 @@ Command-line tool and MCP (Model Context Protocol) server for managing [Biznet G
 
 | Package | Description |
 |---------|-------------|
-| [`@biznetgio/cli`](./biznetgio-cli) | CLI tool for managing Biznet Gio services from the terminal |
-| [`@biznetgio/mcp`](./biznetgio-mcp-server) | MCP server so AI assistants (Claude, etc.) can access the Biznet Gio API |
+| [`@biznetgio/cli`](./cli) | CLI tool for managing Biznet Gio services from the terminal |
+| [`@biznetgio/mcp`](./mcp-server) | MCP server so AI assistants (Claude, etc.) can access the Biznet Gio API |
 
 ## Supported Services
 

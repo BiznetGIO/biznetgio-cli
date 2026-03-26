@@ -13,8 +13,8 @@ Run via `npx`:
 
 ```
 bgn-cli/
-  biznetgio-cli/          # @biznetgio/cli - CLI Package
-  biznetgio-mcp-server/   # @biznetgio/mcp - MCP Server Package
+  cli/          # @biznetgio/cli - CLI Package
+  mcp-server/   # @biznetgio/mcp - MCP Server Package
 ```
 
 ---
@@ -30,7 +30,7 @@ bgn-cli/
 
 ### Package Structure
 ```
-biznetgio-cli/
+cli/
   package.json
   bin/
     biznetgio.js            # CLI entry point
@@ -157,7 +157,7 @@ npx @biznetgio/cli@latest <service> <action> [options]
 
 ### Package Structure
 ```
-biznetgio-mcp-server/
+mcp-server/
   package.json
   src/
     index.js                # MCP server entry point
@@ -196,7 +196,7 @@ Each tool defines a JSON Schema for input parameters using zod, derived directly
 ## Implementation Steps
 
 ### Step 1: Setup both projects
-- Init `biznetgio-cli/` and `biznetgio-mcp-server/` with `npm init`
+- Init `cli/` and `mcp-server/` with `npm init`
 - Install dependencies
 
 ### Step 2: Shared HTTP Client

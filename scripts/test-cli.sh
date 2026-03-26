@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Test script untuk biznetgio-cli
+# Test script untuk cli
 # Menguji semua command --help dan operasi read-only (list, products, dll)
 #
 # Usage:
@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-CLI_DIR="$PROJECT_DIR/biznetgio-cli"
+CLI_DIR="$PROJECT_DIR/cli"
 CLI="node $CLI_DIR/bin/biznetgio.js"
 
 # Colors

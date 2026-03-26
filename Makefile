@@ -4,8 +4,8 @@
 SHELL := /bin/bash
 
 # Directories
-CLI_DIR := biznetgio-cli
-MCP_DIR := biznetgio-mcp-server
+CLI_DIR := cli
+MCP_DIR := mcp-server
 DIST_DIR := dist
 
 # Entry points

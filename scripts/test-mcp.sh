@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Test script untuk biznetgio-mcp-server
+# Test script untuk mcp-server
 # Menguji MCP server initialization, tool listing, dan live tool calls
 #
 # Usage:
@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-MCP_DIR="$PROJECT_DIR/biznetgio-mcp-server"
+MCP_DIR="$PROJECT_DIR/mcp-server"
 MCP_SERVER="node $MCP_DIR/src/index.js"
 
 # Colors
