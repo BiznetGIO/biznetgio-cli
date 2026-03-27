@@ -28,6 +28,15 @@ export function registerObjectStorageCommands(program) {
     }));
 
   objectStorage
+    .command('delete')
+    .description('Delete an object storage account')
+    .argument('<account_id>', 'Account ID')
+    .action(withAuth(async (opts, accountId) => {
+      const data = await apiRequest('DELETE', `/object-storages/${accountId}`, { apiKey: opts.apiKey });
+      output(data, opts);
+    }));
+
+  objectStorage
     .command('create')
     .description('Create an object storage account')
     .requiredOption('--product-id <product_id>', 'Product ID')
