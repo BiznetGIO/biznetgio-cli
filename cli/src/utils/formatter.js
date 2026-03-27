@@ -87,7 +87,7 @@ export function output(data, opts = {}) {
     } else if (typeof extracted === 'object') {
       printObject(extracted);
     } else {
-      console.log(extracted);
+      console.log(String(extracted));
     }
     return;
   }
