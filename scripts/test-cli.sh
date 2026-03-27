@@ -151,14 +151,15 @@ run_contains_test() {
   fi
 }
 
-# Test output is valid JSON (success:true, or valid array/object)
-# Optional 2nd-to-last arg: api_path for curl debug on failure
+# Test API call returns valid JSON
+# Args: description, api_path, cli_command
+# Automatically appends --output json to force JSON output
 run_api_test() {
   local description="$1"
   local api_path="${2:-}"
   shift
   if [[ -n "$api_path" ]]; then shift; fi
-  local cmd="$*"
+  local cmd="$* --output json"
 
   printf "  %-65s" "$description"
   if output=$(eval "$cmd" 2>&1) && echo "$output" | node -e "
@@ -290,7 +291,7 @@ run_fail_test "object-storage bucket list: no account_id" "$CLI object-storage b
 run_fail_test "object-storage object list: no args" "$CLI object-storage object list 2>/dev/null"
 
 subsection "Invalid resource IDs"
-run_contains_test "metal detail 99999 returns null/error" "null\|false\|error\|Cannot" "$CLI metal detail 99999 2>&1 || true"
+run_contains_test "metal detail 99999 returns null/error" "No data\|null\|false\|error\|Cannot" "$CLI metal detail 99999 2>&1 || true"
 
 # ─────────────────────────────────────────────
 # 4. NEO Metal - Live API
@@ -306,7 +307,7 @@ run_api_test "metal keypair list" "/baremetals/keypairs/" "$CLI metal keypair li
 run_api_test "metal openvpn" "/baremetals/openvpn" "$CLI metal openvpn"
 
 subsection "Product detail lookups"
-METAL_PRODUCT_ID=$($CLI metal products 2>/dev/null | extract_first_id product_id)
+METAL_PRODUCT_ID=$($CLI metal products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$METAL_PRODUCT_ID" ]]; then
   run_api_test "metal product $METAL_PRODUCT_ID" "/baremetals/products/$METAL_PRODUCT_ID" "$CLI metal product $METAL_PRODUCT_ID"
   run_api_test "metal product-os $METAL_PRODUCT_ID" "/baremetals/products/$METAL_PRODUCT_ID/oss" "$CLI metal product-os $METAL_PRODUCT_ID"
@@ -315,7 +316,7 @@ else
 fi
 
 subsection "Account detail lookups"
-METAL_ACCOUNT_ID=$($CLI metal list 2>/dev/null | extract_first_id account_id)
+METAL_ACCOUNT_ID=$($CLI metal list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$METAL_ACCOUNT_ID" ]]; then
   run_api_test "metal detail $METAL_ACCOUNT_ID" "/baremetals/accounts/$METAL_ACCOUNT_ID" "$CLI metal detail $METAL_ACCOUNT_ID"
   run_api_test "metal state $METAL_ACCOUNT_ID" "/baremetals/accounts/$METAL_ACCOUNT_ID/state" "$CLI metal state $METAL_ACCOUNT_ID"
@@ -333,14 +334,14 @@ section "5. Elastic Storage - Live API"
 run_api_test "elastic-storage list" "/baremetal-neo-elastic-storages" "$CLI elastic-storage list"
 run_api_test "elastic-storage products" "/baremetal-neo-elastic-storages/products" "$CLI elastic-storage products"
 
-ES_PRODUCT_ID=$($CLI elastic-storage products 2>/dev/null | extract_first_id product_id)
+ES_PRODUCT_ID=$($CLI elastic-storage products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$ES_PRODUCT_ID" ]]; then
   run_api_test "elastic-storage product $ES_PRODUCT_ID" "/baremetal-neo-elastic-storages/products/$ES_PRODUCT_ID" "$CLI elastic-storage product $ES_PRODUCT_ID"
 else
   skip_test "elastic-storage product detail" "no products"
 fi
 
-ES_ACCOUNT_ID=$($CLI elastic-storage list 2>/dev/null | extract_first_id account_id)
+ES_ACCOUNT_ID=$($CLI elastic-storage list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$ES_ACCOUNT_ID" ]]; then
   run_api_test "elastic-storage detail $ES_ACCOUNT_ID" "/baremetal-neo-elastic-storages/$ES_ACCOUNT_ID" "$CLI elastic-storage detail $ES_ACCOUNT_ID"
 else
@@ -357,14 +358,14 @@ run_api_test "additional-ip list" "/baremetal-additional-ips" "$CLI additional-i
 run_api_test "additional-ip regions" "/baremetal-additional-ips/regions" "$CLI additional-ip regions"
 run_api_test "additional-ip products" "/baremetal-additional-ips/products" "$CLI additional-ip products"
 
-AIP_PRODUCT_ID=$($CLI additional-ip products 2>/dev/null | extract_first_id product_id)
+AIP_PRODUCT_ID=$($CLI additional-ip products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$AIP_PRODUCT_ID" ]]; then
   run_api_test "additional-ip product $AIP_PRODUCT_ID" "/baremetal-additional-ips/products/$AIP_PRODUCT_ID" "$CLI additional-ip product $AIP_PRODUCT_ID"
 else
   skip_test "additional-ip product detail" "no products"
 fi
 
-AIP_ACCOUNT_ID=$($CLI additional-ip list 2>/dev/null | extract_first_id account_id)
+AIP_ACCOUNT_ID=$($CLI additional-ip list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$AIP_ACCOUNT_ID" ]]; then
   run_api_test "additional-ip detail $AIP_ACCOUNT_ID" "/baremetal-additional-ips/$AIP_ACCOUNT_ID" "$CLI additional-ip detail $AIP_ACCOUNT_ID"
   run_api_test "additional-ip assigns $AIP_ACCOUNT_ID" "/baremetal-additional-ips/$AIP_ACCOUNT_ID/assigns" "$CLI additional-ip assigns $AIP_ACCOUNT_ID"
@@ -388,7 +389,7 @@ run_api_test "neolite disk list" "/neolites/disks/accounts" "$CLI neolite disk l
 run_api_test "neolite disk products" "/neolites/disks/products" "$CLI neolite disk products"
 
 subsection "Product detail lookups"
-NL_PRODUCT_ID=$($CLI neolite products 2>/dev/null | extract_first_id product_id)
+NL_PRODUCT_ID=$($CLI neolite products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$NL_PRODUCT_ID" ]]; then
   run_api_test "neolite product $NL_PRODUCT_ID" "/neolites/products/$NL_PRODUCT_ID" "$CLI neolite product $NL_PRODUCT_ID"
   run_api_test "neolite product-os $NL_PRODUCT_ID" "/neolites/products/$NL_PRODUCT_ID/oss" "$CLI neolite product-os $NL_PRODUCT_ID"
@@ -397,14 +398,14 @@ else
   skip_test "neolite product detail" "no products"
 fi
 
-NL_SNAP_PRODUCT_ID=$($CLI neolite snapshot products 2>/dev/null | extract_first_id product_id)
+NL_SNAP_PRODUCT_ID=$($CLI neolite snapshot products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$NL_SNAP_PRODUCT_ID" ]]; then
   run_api_test "neolite snapshot product $NL_SNAP_PRODUCT_ID" "/neolites/snapshots/products/$NL_SNAP_PRODUCT_ID" "$CLI neolite snapshot product $NL_SNAP_PRODUCT_ID"
 else
   skip_test "neolite snapshot product detail" "no products"
 fi
 
-NL_DISK_PRODUCT_ID=$($CLI neolite disk products 2>/dev/null | extract_first_id product_id)
+NL_DISK_PRODUCT_ID=$($CLI neolite disk products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$NL_DISK_PRODUCT_ID" ]]; then
   run_api_test "neolite disk product $NL_DISK_PRODUCT_ID" "/neolites/disks/products/$NL_DISK_PRODUCT_ID" "$CLI neolite disk product $NL_DISK_PRODUCT_ID"
 else
@@ -412,7 +413,7 @@ else
 fi
 
 subsection "Account detail lookups"
-NL_ACCOUNT_ID=$($CLI neolite list 2>/dev/null | extract_first_id account_id)
+NL_ACCOUNT_ID=$($CLI neolite list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$NL_ACCOUNT_ID" ]]; then
   run_api_test "neolite detail $NL_ACCOUNT_ID" "/neolites/accounts/$NL_ACCOUNT_ID" "$CLI neolite detail $NL_ACCOUNT_ID"
   run_api_test "neolite vm-details $NL_ACCOUNT_ID" "/neolites/accounts/$NL_ACCOUNT_ID/vm-details" "$CLI neolite vm-details $NL_ACCOUNT_ID"
@@ -438,7 +439,7 @@ run_api_test "neolite-pro disk list" "/neolite-pros/disks/accounts" "$CLI neolit
 run_api_test "neolite-pro disk products" "/neolite-pros/disks/products" "$CLI neolite-pro disk products"
 
 subsection "Product detail lookups"
-NLP_PRODUCT_ID=$($CLI neolite-pro products 2>/dev/null | extract_first_id product_id)
+NLP_PRODUCT_ID=$($CLI neolite-pro products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$NLP_PRODUCT_ID" ]]; then
   run_api_test "neolite-pro product $NLP_PRODUCT_ID" "/neolite-pros/products/$NLP_PRODUCT_ID" "$CLI neolite-pro product $NLP_PRODUCT_ID"
   run_api_test "neolite-pro product-os $NLP_PRODUCT_ID" "/neolite-pros/products/$NLP_PRODUCT_ID/oss" "$CLI neolite-pro product-os $NLP_PRODUCT_ID"
@@ -448,7 +449,7 @@ else
 fi
 
 subsection "Account detail lookups"
-NLP_ACCOUNT_ID=$($CLI neolite-pro list 2>/dev/null | extract_first_id account_id)
+NLP_ACCOUNT_ID=$($CLI neolite-pro list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$NLP_ACCOUNT_ID" ]]; then
   run_api_test "neolite-pro detail $NLP_ACCOUNT_ID" "/neolite-pros/accounts/$NLP_ACCOUNT_ID" "$CLI neolite-pro detail $NLP_ACCOUNT_ID"
   run_api_test "neolite-pro vm-details $NLP_ACCOUNT_ID" "/neolite-pros/accounts/$NLP_ACCOUNT_ID/vm-details" "$CLI neolite-pro vm-details $NLP_ACCOUNT_ID"
@@ -468,7 +469,7 @@ run_api_test "object-storage list" "/object-storages/accounts" "$CLI object-stor
 run_api_test "object-storage products" "/object-storages/products" "$CLI object-storage products"
 
 subsection "Product detail lookups"
-OBJ_PRODUCT_ID=$($CLI object-storage products 2>/dev/null | extract_first_id product_id)
+OBJ_PRODUCT_ID=$($CLI object-storage products --output json 2>/dev/null | extract_first_id product_id)
 if [[ -n "$OBJ_PRODUCT_ID" ]]; then
   run_api_test "object-storage product $OBJ_PRODUCT_ID" "/object-storages/products/$OBJ_PRODUCT_ID" "$CLI object-storage product $OBJ_PRODUCT_ID"
 else
@@ -476,14 +477,14 @@ else
 fi
 
 subsection "Account & bucket operations"
-OBJ_ACCOUNT_ID=$($CLI object-storage list 2>/dev/null | extract_first_id account_id)
+OBJ_ACCOUNT_ID=$($CLI object-storage list --output json 2>/dev/null | extract_first_id account_id)
 if [[ -n "$OBJ_ACCOUNT_ID" ]]; then
   run_api_test "object-storage detail $OBJ_ACCOUNT_ID" "/object-storages/accounts/$OBJ_ACCOUNT_ID" "$CLI object-storage detail $OBJ_ACCOUNT_ID"
   run_api_test "object-storage credential list $OBJ_ACCOUNT_ID" "/object-storages/accounts/$OBJ_ACCOUNT_ID/credentials" "$CLI object-storage credential list $OBJ_ACCOUNT_ID"
   run_api_test "object-storage bucket list $OBJ_ACCOUNT_ID" "/object-storages/accounts/$OBJ_ACCOUNT_ID/buckets" "$CLI object-storage bucket list $OBJ_ACCOUNT_ID"
 
   # Try bucket detail if there are buckets
-  BUCKET_NAME=$($CLI object-storage bucket list $OBJ_ACCOUNT_ID 2>/dev/null | node -e "
+  BUCKET_NAME=$($CLI object-storage bucket list $OBJ_ACCOUNT_ID --output json 2>/dev/null | node -e "
     let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
       try{
         const j=JSON.parse(d);
@@ -511,9 +512,9 @@ fi
 
 section "10. Output Format Tests"
 
-run_contains_test "JSON output contains '{'" "{" "$CLI metal products --output json | head -1"
+run_contains_test "JSON output contains '{' or '['" "{\|\\[" "$CLI metal states --output json | head -1"
 run_test "Table output is not JSON" "! $CLI metal states --output table 2>&1 | head -1 | grep -q '^\s*{'"
-run_contains_test "Default output is JSON" "{" "$CLI metal states | head -1"
+run_test "Default output is table (not JSON)" "! $CLI metal states 2>&1 | head -1 | grep -q '^\s*{'"
 
 # ─────────────────────────────────────────────
 # 11. API key override
