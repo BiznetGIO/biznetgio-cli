@@ -1,3 +1,32 @@
+---
+name: Biznet Gio Cloud Management
+description: Manage Biznet Gio cloud infrastructure (servers, VMs, storage, IPs) via CLI and MCP server
+homepage: https://github.com/BiznetGIO/biznetgio-cli
+license: MIT
+required_env:
+  - name: BIZNETGIO_API_KEY
+    required: true
+    description: API token from Biznet Gio Portal (https://portal.biznetgio.com). Sent as x-token header.
+  - name: BIZNETGIO_BASE_URL
+    required: false
+    description: Override API base URL. Defaults to https://api.portal.biznetgio.com/v1.
+required_binaries:
+  - name: node
+    version: ">=18"
+    description: Node.js runtime for the CLI and MCP server.
+  - name: npx
+    description: Included with Node.js. Fetches and runs @biznetgio/cli from npm registry.
+primary_credential: BIZNETGIO_API_KEY
+packages:
+  - name: "@biznetgio/cli"
+    registry: npm
+    url: https://www.npmjs.com/package/@biznetgio/cli
+  - name: "@biznetgio/mcp"
+    registry: npm
+    url: https://www.npmjs.com/package/@biznetgio/mcp
+install: npx @biznetgio/cli@latest
+---
+
 # Biznet Gio Cloud Management - Agent Skill Guide
 
 ## Skill Metadata
@@ -11,6 +40,7 @@
 | **npm (MCP)** | [@biznetgio/mcp](https://www.npmjs.com/package/@biznetgio/mcp) |
 | **API Docs** | https://api.portal.biznetgio.com/v1/openapi.json |
 | **License** | MIT |
+| **Primary Credential** | `BIZNETGIO_API_KEY` |
 
 ### Required Environment Variables
 
@@ -21,16 +51,17 @@
 
 ### Required Binaries
 
-| Binary | Required | Description |
-|--------|----------|-------------|
-| `node` | **Yes** | Node.js >= 18. Runtime for the CLI and MCP server. |
-| `npx` | **Yes** | Included with Node.js. Used to fetch and run `@biznetgio/cli` from the npm registry without global installation. |
+| Binary | Version | Required | Description |
+|--------|---------|----------|-------------|
+| `node` | >= 18 | **Yes** | Node.js runtime for the CLI and MCP server. |
+| `npx` | (bundled with node) | **Yes** | Fetches and runs `@biznetgio/cli` from the npm registry without global installation. |
 
 ### Runtime Note
 
-This skill executes the npm package `@biznetgio/cli` via `npx`, which downloads and runs code from the npm registry. The package is published under the `@biznetgio` npm scope by Biznet Gio. If you require stronger guarantees, you can:
+This skill executes the npm package `@biznetgio/cli` via `npx`, which downloads and runs code from the npm registry. The package is published under the `@biznetgio` npm scope by [Biznet Gio](https://www.biznetgio.com). Source code is available at [github.com/BiznetGIO/biznetgio-cli](https://github.com/BiznetGIO/biznetgio-cli). If you require stronger guarantees, you can:
 - Pre-install with `npm install -g @biznetgio/cli` and verify the package before use
 - Use the pre-built standalone binaries from the [GitHub releases](https://github.com/BiznetGIO/biznetgio-cli/releases)
+- Pin to a specific version: `npx @biznetgio/cli@1.0.0` instead of `@latest`
 - Run in a sandboxed environment
 
 ---
