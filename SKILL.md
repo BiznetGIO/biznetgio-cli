@@ -2,17 +2,22 @@
 
 You are an agent that can manage Biznet Gio cloud infrastructure using the CLI tool `@biznetgio/cli` and/or MCP server `@biznetgio/mcp`.
 
-## How to Run
+## Important Instructions
 
-**IMPORTANT: Always use `npx` to run the CLI. No installation required.**
+1. **Always use `npx`** to run the CLI. No installation required.
+2. **Always confirm before executing.** Before running any CLI command, show the user the full command with all values and ask for confirmation. The user may want to revise parameter values before execution. Never run a command without user approval.
+3. **For destructive actions (delete, rebuild, state changes), double confirm.** Clearly warn the user about the impact and ask explicitly: "Are you sure?"
+4. **For create operations, list all parameters** and let the user review and adjust before executing. Show product options, OS choices, and pricing when available.
+
+## How to Run
 
 ```bash
 npx @biznetgio/cli@latest <service> <action> [arguments] [options]
 ```
 
 - **API Key**: environment variable `BIZNETGIO_API_KEY` (sent as `x-token` header)
-- **Base API**: `https://api.portal.biznetgio.com/v1`
-- **Output format**: default `json`, add `--output table` for table display
+- **Base URL**: `https://api.portal.biznetgio.com/v1` (override with `BIZNETGIO_BASE_URL` env)
+- **Output format**: default `table`, use `--output json` for JSON output
 
 ## Available Services
 
@@ -32,7 +37,14 @@ npx @biznetgio/cli@latest <service> <action> [arguments] [options]
 npx @biznetgio/cli@latest <service> <subgroup> <action> [arguments] [options]
 ```
 
-Global options: `--api-key <key>`, `--output json|table`
+Global options: `--api-key <key>`, `--output table|json`
+
+## Output Behavior
+
+- **Default: table** — List data is displayed as formatted tables. Nested objects (billing, specs, options) are automatically flattened. Billing is summarized as `price/mo`.
+- **`--output json`** — Raw JSON from the API `.data` field.
+- **Primitive responses** (e.g. delete, update-label) return plain text like `success` or `true`.
+- **Empty lists** show `No data found.`
 
 ## Valid Enum Values
 
@@ -40,6 +52,8 @@ Global options: `--api-key <key>`, `--output json|table`
 - **Metal states**: `on`, `off`, `reset`
 - **VM states** (neolite/neolite-pro): `stop`, `suspend`, `resume`, `shutdown`, `start`, `reset`
 - **Object ACL**: `private`, `public-read`, `public-read-write`, `authenticated-read`, `log-delivery-write`
+- **Console password**: must match `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$` (min 8 chars, uppercase + lowercase + digit, alphanumeric only — no special characters)
+- **Label**: max 16 characters
 
 ---
 
@@ -60,10 +74,10 @@ Global options: `--api-key <key>`, `--output json|table`
    npx @biznetgio/cli@latest neolite product-os <product_id>
    ```
 
-3. **Check available keypairs**:
+3. **Check available keypairs** (or create one first):
    ```bash
-   npx @biznetgio/cli@latest metal keypair list
    npx @biznetgio/cli@latest neolite keypair list
+   npx @biznetgio/cli@latest neolite keypair create --name "my-key"
    ```
 
 4. **Check IP availability** (neolite):
@@ -81,17 +95,17 @@ npx @biznetgio/cli@latest metal create \
 
 # Create a NEO Lite instance
 npx @biznetgio/cli@latest neolite create \
-  --product-id <id> --cycle m --select-os "ubuntu-22.04" \
+  --product-id <id> --cycle m --select-os "Ubuntu-20.04" \
   --keypair-id <id> --ssh-and-console-user myuser \
-  --console-password "SecureP@ss123"
+  --console-password TestPass123
 
 # Create a NEO Lite Pro instance
 npx @biznetgio/cli@latest neolite-pro create \
-  --product-id <id> --cycle m --select-os "ubuntu-22.04" \
+  --product-id <id> --cycle m --select-os "Ubuntu-20.04" \
   --keypair-id <id> --ssh-and-console-user myuser \
-  --console-password "SecureP@ss123"
+  --console-password TestPass123
 
-# Create object storage
+# Create object storage (label max 16 chars)
 npx @biznetgio/cli@latest object-storage create \
   --product-id <id> --cycle m --label "my-storage"
 
@@ -102,6 +116,22 @@ npx @biznetgio/cli@latest elastic-storage create \
 
 # Create additional IP
 npx @biznetgio/cli@latest additional-ip create --product-id <id> --cycle m
+```
+
+### Deleting Resources
+
+```bash
+npx @biznetgio/cli@latest metal delete <account_id>
+npx @biznetgio/cli@latest neolite delete <account_id>
+npx @biznetgio/cli@latest neolite-pro delete <account_id>
+npx @biznetgio/cli@latest elastic-storage delete <account_id>
+npx @biznetgio/cli@latest additional-ip delete <account_id>
+npx @biznetgio/cli@latest object-storage delete <account_id>
+npx @biznetgio/cli@latest object-storage bucket delete <account_id> <bucket_name>
+npx @biznetgio/cli@latest object-storage object delete <account_id> <bucket_name> <path>
+npx @biznetgio/cli@latest neolite snapshot delete <account_id>
+npx @biznetgio/cli@latest neolite disk delete <account_id>
+npx @biznetgio/cli@latest <service> keypair delete <keypair_id>
 ```
 
 ### Managing Server State
@@ -123,6 +153,8 @@ npx @biznetgio/cli@latest neolite-pro set-state <account_id> shutdown
 # Credential management
 npx @biznetgio/cli@latest object-storage credential list <account_id>
 npx @biznetgio/cli@latest object-storage credential create <account_id>
+npx @biznetgio/cli@latest object-storage credential update <account_id> <access_key> --active
+npx @biznetgio/cli@latest object-storage credential delete <account_id> <access_key>
 
 # Bucket operations
 npx @biznetgio/cli@latest object-storage bucket list <account_id>
@@ -155,15 +187,20 @@ npx @biznetgio/cli@latest neolite snapshot detail <account_id>
 npx @biznetgio/cli@latest neolite snapshot restore <account_id>
 npx @biznetgio/cli@latest neolite snapshot create-instance <snapshot_account_id> \
   --product-id <id> --cycle m --keypair-id <id> --name "from-snap" \
-  --ssh-and-console-user myuser --console-password "P@ss123"
+  --ssh-and-console-user myuser --console-password TestPass123
 npx @biznetgio/cli@latest neolite snapshot delete <account_id>
+npx @biznetgio/cli@latest neolite snapshot products
+npx @biznetgio/cli@latest neolite snapshot product <product_id>
 
 # Additional disks
 npx @biznetgio/cli@latest neolite disk create \
   --product-id <id> --cycle m --neolite-account-id <id>
 npx @biznetgio/cli@latest neolite disk list
+npx @biznetgio/cli@latest neolite disk detail <account_id>
 npx @biznetgio/cli@latest neolite disk upgrade <account_id> --additional-size 20
 npx @biznetgio/cli@latest neolite disk delete <account_id>
+npx @biznetgio/cli@latest neolite disk products
+npx @biznetgio/cli@latest neolite disk product <product_id>
 ```
 
 ### Keypair Management
@@ -183,18 +220,21 @@ npx @biznetgio/cli@latest <service> keypair delete <keypair_id>
 npx @biznetgio/cli@latest neolite upgrade-storage <account_id> --disk-size 50
 npx @biznetgio/cli@latest neolite-pro upgrade-storage <account_id> --disk-size 100
 
-# Change package (upgrade plan)
-npx @biznetgio/cli@latest neolite change-package-options <account_id>   # check options first
+# Change package (upgrade plan) — check options first
+npx @biznetgio/cli@latest neolite change-package-options <account_id>
 npx @biznetgio/cli@latest neolite change-package <account_id> --new-product-id <id>
 
 # Upgrade elastic storage
 npx @biznetgio/cli@latest elastic-storage upgrade <account_id> --size 100
 
+# Change elastic storage package
+npx @biznetgio/cli@latest elastic-storage change-package <account_id> --new-product-id <id>
+
 # Upgrade object storage quota
 npx @biznetgio/cli@latest object-storage upgrade-quota <account_id> --add-quota 50
 
-# Migrate neolite to pro
-npx @biznetgio/cli@latest neolite migrate-to-pro-products <account_id>  # check options first
+# Migrate neolite to pro — check options first
+npx @biznetgio/cli@latest neolite migrate-to-pro-products <account_id>
 npx @biznetgio/cli@latest neolite migrate-to-pro <account_id> --neolitepro-product-id <id>
 ```
 
@@ -206,8 +246,23 @@ npx @biznetgio/cli@latest metal rebuild-os <account_id>
 
 # Rebuild
 npx @biznetgio/cli@latest metal rebuild <account_id> --os "ubuntu-22.04"
-npx @biznetgio/cli@latest neolite rebuild <account_id> --select-os "ubuntu-22.04"
-npx @biznetgio/cli@latest neolite-pro rebuild <account_id> --select-os "ubuntu-22.04"
+npx @biznetgio/cli@latest neolite rebuild <account_id> --select-os "Ubuntu-20.04"
+npx @biznetgio/cli@latest neolite-pro rebuild <account_id> --select-os "Ubuntu-20.04"
+```
+
+### Update & Rename
+
+```bash
+# Update metal label (max 16 chars)
+npx @biznetgio/cli@latest metal update-label <account_id> --label "new-label"
+
+# Rename neolite/neolite-pro VM
+npx @biznetgio/cli@latest neolite rename <account_id> --name "new-name"
+npx @biznetgio/cli@latest neolite-pro rename <account_id> --name "new-name"
+
+# Change keypair
+npx @biznetgio/cli@latest neolite change-keypair <account_id> --keypair-id <id>
+npx @biznetgio/cli@latest neolite-pro change-keypair <account_id> --keypair-id <id>
 ```
 
 ### Additional IP Assignment
@@ -222,9 +277,32 @@ npx @biznetgio/cli@latest additional-ip create --product-id <id> --cycle m
 npx @biznetgio/cli@latest additional-ip assign <ip_account_id> --metal-account-id <metal_id>
 npx @biznetgio/cli@latest additional-ip assigns <ip_account_id>
 npx @biznetgio/cli@latest additional-ip assignments <metal_account_id>
+npx @biznetgio/cli@latest additional-ip assign-detail <ip_account_id> <metal_account_id>
 
 # Unassign
 npx @biznetgio/cli@latest additional-ip unassign <ip_account_id> <metal_account_id>
+```
+
+### Detail & Info Commands
+
+```bash
+# Account details
+npx @biznetgio/cli@latest metal detail <account_id>
+npx @biznetgio/cli@latest neolite detail <account_id>
+npx @biznetgio/cli@latest neolite-pro detail <account_id>
+npx @biznetgio/cli@latest elastic-storage detail <account_id>
+npx @biznetgio/cli@latest additional-ip detail <account_id>
+npx @biznetgio/cli@latest object-storage detail <account_id>
+
+# VM details
+npx @biznetgio/cli@latest neolite vm-details <account_id>
+npx @biznetgio/cli@latest neolite-pro vm-details <account_id>
+
+# Server state
+npx @biznetgio/cli@latest metal state <account_id>
+
+# OpenVPN config
+npx @biznetgio/cli@latest metal openvpn
 ```
 
 ---
@@ -233,18 +311,9 @@ npx @biznetgio/cli@latest additional-ip unassign <ip_account_id> <metal_account_
 
 The following commands are **destructive** and cannot be undone. **ALWAYS confirm with the user before running:**
 
-```bash
-npx @biznetgio/cli@latest metal delete <account_id>
-npx @biznetgio/cli@latest neolite delete <account_id>
-npx @biznetgio/cli@latest neolite-pro delete <account_id>
-npx @biznetgio/cli@latest elastic-storage delete <account_id>
-npx @biznetgio/cli@latest additional-ip delete <account_id>
-npx @biznetgio/cli@latest object-storage bucket delete <account_id> <bucket_name>
-npx @biznetgio/cli@latest object-storage object delete <account_id> <bucket_name> <path>
-npx @biznetgio/cli@latest neolite snapshot delete <account_id>
-npx @biznetgio/cli@latest neolite disk delete <account_id>
-npx @biznetgio/cli@latest <service> keypair delete <keypair_id>
-```
+- All `delete` commands (server, VM, storage, IP, bucket, object, snapshot, disk, keypair)
+- `rebuild` commands (reinstalls OS, wipes data)
+- `set-state off/shutdown/reset` (may cause downtime)
 
 ---
 
@@ -254,13 +323,14 @@ When using the MCP server, all endpoints are exposed as tools with naming conven
 
 | CLI Command | MCP Tool |
 |-------------|----------|
-| `npx @biznetgio/cli@latest metal list` | `metal_list` |
-| `npx @biznetgio/cli@latest metal detail 123` | `metal_detail` `{account_id: 123}` |
-| `npx @biznetgio/cli@latest metal set-state 123 on` | `metal_set_state` `{account_id: 123, state: "on"}` |
-| `npx @biznetgio/cli@latest neolite create ...` | `neolite_create` `{product_id, cycle, ...}` |
-| `npx @biznetgio/cli@latest object-storage bucket list 123` | `object_storage_bucket_list` `{account_id: 123}` |
-| `npx @biznetgio/cli@latest neolite snapshot list` | `neolite_snapshot_list` `{}` |
-| `npx @biznetgio/cli@latest neolite disk create ...` | `neolite_disk_create` `{product_id, cycle, ...}` |
+| `metal list` | `metal_list` |
+| `metal detail 123` | `metal_detail` `{account_id: 123}` |
+| `metal set-state 123 on` | `metal_set_state` `{account_id: 123, state: "on"}` |
+| `neolite create ...` | `neolite_create` `{product_id, cycle, ...}` |
+| `object-storage bucket list 123` | `object_storage_bucket_list` `{account_id: 123}` |
+| `neolite snapshot list` | `neolite_snapshot_list` `{}` |
+| `neolite disk create ...` | `neolite_disk_create` `{product_id, cycle, ...}` |
+| `object-storage delete 123` | `object_storage_delete` `{account_id: 123}` |
 
 Total: **131 tools** available in the MCP server.
 
@@ -288,4 +358,6 @@ MCP server configuration for Claude Desktop / Claude Code:
 | `API key not set` | Set `export BIZNETGIO_API_KEY=xxx` or use `--api-key` flag |
 | `API Error 401` | API key is invalid or expired |
 | `API Error 404` | Resource not found, check the account_id |
-| `API Error 422` | Validation error, check the parameters being sent |
+| `API Error 422` | Validation error — check password regex, label max 16 chars, required fields |
+| `API Error 500` | Server error — retry or check if the resource exists |
+| `No data found.` | The list is empty, no resources of this type exist yet |
