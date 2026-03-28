@@ -78,10 +78,18 @@ You are an agent that can manage Biznet Gio cloud infrastructure using the CLI t
 ## How to Run
 
 ```bash
+# With API key inline
+BIZNETGIO_API_KEY=<YOUR_KEY> npx @biznetgio/cli@latest <service> <action> [arguments] [options]
+
+# Or export the key first
+export BIZNETGIO_API_KEY=<YOUR_KEY>
 npx @biznetgio/cli@latest <service> <action> [arguments] [options]
+
+# Or pass API key as flag
+npx @biznetgio/cli@latest <service> <action> --api-key <YOUR_KEY> [arguments] [options]
 ```
 
-- **API Key**: environment variable `BIZNETGIO_API_KEY` (sent as `x-token` header)
+- **API Key**: environment variable `BIZNETGIO_API_KEY` (sent as `x-token` header), or `--api-key` flag
 - **Base URL**: `https://api.portal.biznetgio.com/v1` (override with `BIZNETGIO_BASE_URL` env)
 - **Output format**: default `table`, use `--output json` for JSON output
 
