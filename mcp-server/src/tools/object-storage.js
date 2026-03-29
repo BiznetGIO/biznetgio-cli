@@ -37,6 +37,18 @@ export function registerObjectStorageTools(server) {
   );
 
   server.tool(
+    'object_storage_delete',
+    'Delete an Object Storage account',
+    { account_id: z.number().describe('Account ID') },
+    async ({ account_id }) => {
+      try {
+        const result = await apiRequest('DELETE', `/object-storages/${account_id}`);
+        return success(result);
+      } catch (err) { return error(err); }
+    }
+  );
+
+  server.tool(
     'object_storage_create',
     'Create a new Object Storage',
     {

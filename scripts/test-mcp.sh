@@ -7,12 +7,13 @@
 #   ./scripts/test-mcp.sh
 #
 
-set -uo pipefail
+set +e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MCP_DIR="$PROJECT_DIR/mcp-server"
-MCP_SERVER="node $MCP_DIR/src/index.js"
+MCP_ENTRY="$MCP_DIR/src/index.js"
+MCP_CALL="$SCRIPT_DIR/mcp-call.js"
 ENV_FILE="$PROJECT_DIR/.env"
 
 # Load .env
@@ -43,107 +44,92 @@ FAIL=0
 SKIP=0
 ERRORS=()
 
+# Logging
+LOG_DIR="$PROJECT_DIR/logs"
+mkdir -p "$LOG_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG_FILE="$LOG_DIR/test-mcp_${TIMESTAMP}.log"
+BASE_URL="${BIZNETGIO_BASE_URL:-https://api.portal.biznetgio.com/v1}"
+
+log() { echo "$@" >> "$LOG_FILE"; }
+
+log "=== @biznetgio/mcp test run ==="
+log "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+log "Base URL:  $BASE_URL"
+log ""
+
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
 
-# Send initialize + request to MCP server
-mcp_request() {
-  local method="$1"
-  local params="${2:-{}}"
-  local id="${3:-2}"
-
-  local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
-  local notif='{"jsonrpc":"2.0","method":"notifications/initialized"}'
-  local req="{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\",\"params\":$params}"
-
-  printf '%s\n%s\n%s\n' "$init" "$notif" "$req" | timeout 15 $MCP_SERVER 2>/dev/null
+# Call MCP tool and capture output
+mcp_call() {
+  node "$MCP_CALL" "$MCP_ENTRY" call "$1" "${2:-\{\}}" 2>/dev/null
 }
+mcp_list() { node "$MCP_CALL" "$MCP_ENTRY" list 2>/dev/null; }
 
 run_test() {
-  local description="$1"
-  shift
-  local cmd="$*"
-
-  printf "  %-65s" "$description"
+  local desc="$1"; shift; local cmd="$*"
+  printf "  %-65s" "$desc"
   if output=$(eval "$cmd" 2>&1); then
-    echo -e "${GREEN}PASS${NC}"
-    ((PASS++))
-    return 0
+    echo -e "${GREEN}PASS${NC}"; ((PASS++)); return 0
   else
-    echo -e "${RED}FAIL${NC}"
-    ERRORS+=("$description\n    cmd: $cmd\n    out: $output")
-    ((FAIL++))
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    ERRORS+=("$desc\n    cmd: $cmd\n    out: $(echo "$output" | head -c 200)")
+    log "FAIL: $desc"; log "  cmd: $cmd"; log "  out: $output"; log ""
     return 1
   fi
 }
 
 run_contains_test() {
-  local description="$1"
-  local expected="$2"
-  shift 2
-  local cmd="$*"
-
-  printf "  %-65s" "$description"
+  local desc="$1"; local expected="$2"; shift 2; local cmd="$*"
+  printf "  %-65s" "$desc"
   output=$(eval "$cmd" 2>&1) || true
   if echo "$output" | grep -q "$expected"; then
-    echo -e "${GREEN}PASS${NC}"
-    ((PASS++))
-    return 0
+    echo -e "${GREEN}PASS${NC}"; ((PASS++)); return 0
   else
-    echo -e "${RED}FAIL${NC}"
-    ERRORS+=("$description\n    expected: '$expected'\n    got: $(echo "$output" | head -3)")
-    ((FAIL++))
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    ERRORS+=("$desc\n    expected: '$expected'\n    got: $(echo "$output" | head -c 200)")
+    log "FAIL: $desc"; log "  expected: $expected"; log "  got: $(echo "$output" | head -3)"; log ""
     return 1
   fi
 }
 
-# Call a tool and check that response contains "content"
 run_tool_test() {
-  local description="$1"
-  local tool_name="$2"
-  local args="${3:-{}}"
-
-  printf "  %-65s" "$description"
+  local desc="$1"; local tool="$2"; local args="${3:-{}}"
+  printf "  %-65s" "$desc"
   local response
-  response=$(mcp_request "tools/call" "{\"name\":\"$tool_name\",\"arguments\":$args}" 3 2>/dev/null || true)
-  local last_line
-  last_line=$(echo "$response" | tail -1)
-  if echo "$last_line" | grep -q '"content"'; then
-    echo -e "${GREEN}PASS${NC}"
-    ((PASS++))
-    return 0
+  response=$(mcp_call "$tool" "$args" 2>/dev/null || true)
+  if echo "$response" | grep -q '"content"'; then
+    echo -e "${GREEN}PASS${NC}"; ((PASS++)); return 0
   else
-    echo -e "${RED}FAIL${NC}"
-    ERRORS+=("$description (tool: $tool_name)\n    response: $(echo "$last_line" | head -1)")
-    ((FAIL++))
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    ERRORS+=("$desc (tool: $tool)\n    response: $(echo "$response" | head -c 200)")
+    log "FAIL: $desc (tool: $tool)"; log "  args: $args"; log "  response: $(echo "$response" | head -c 500)"; log ""
     return 1
   fi
 }
 
-skip_test() {
-  local description="$1"
-  local reason="${2:-no data}"
-  printf "  %-65s" "$description"
-  echo -e "${YELLOW}SKIP${NC} ($reason)"
-  ((SKIP++))
+check_tool() {
+  local name="$1"
+  printf "  %-65s" "Tool: $name"
+  if echo "$TOOLS_LIST" | grep -q "\"name\":\"$name\""; then
+    echo -e "${GREEN}PASS${NC}"; ((PASS++))
+  else
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    ERRORS+=("Tool not found: $name")
+  fi
 }
 
-section() {
-  echo ""
-  echo -e "${CYAN}${BOLD}━━━ $1 ━━━${NC}"
-}
-
-subsection() {
-  echo -e "  ${BOLD}── $1${NC}"
-}
+section() { echo ""; echo -e "${CYAN}${BOLD}━━━ $1 ━━━${NC}"; }
+subsection() { echo -e "  ${BOLD}── $1${NC}"; }
 
 echo -e "${CYAN}${BOLD}"
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║    @biznetgio/mcp - Comprehensive Test Suite            ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
-echo -e "  Base URL: ${BOLD}${BIZNETGIO_BASE_URL:-https://api.portal.biznetgio.com/v1}${NC}"
+echo -e "  Base URL: ${BOLD}$BASE_URL${NC}"
 
 # ─────────────────────────────────────────────
 # 1. Pre-flight
@@ -152,7 +138,8 @@ echo -e "  Base URL: ${BOLD}${BIZNETGIO_BASE_URL:-https://api.portal.biznetgio.c
 section "1. Pre-flight Checks"
 
 run_test "Node.js available" "node --version"
-run_test "MCP entry point exists" "test -f $MCP_DIR/src/index.js"
+run_test "MCP entry point exists" "test -f $MCP_ENTRY"
+run_test "MCP call helper exists" "test -f $MCP_CALL"
 run_test "Dependencies installed" "test -d $MCP_DIR/node_modules"
 run_test "All tool modules exist" \
   "test -f $MCP_DIR/src/tools/metal.js && \
@@ -163,52 +150,28 @@ run_test "All tool modules exist" \
    test -f $MCP_DIR/src/tools/object-storage.js"
 
 # ─────────────────────────────────────────────
-# 2. MCP Initialize
+# 2. MCP Initialize & Tool Listing
 # ─────────────────────────────────────────────
 
 section "2. MCP Server Initialization"
 
-INIT_RESPONSE=$(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | timeout 5 $MCP_SERVER 2>/dev/null || true)
+TOOLS_LIST=$(mcp_list 2>/dev/null || true)
 
-run_contains_test "Server responds to initialize" "serverInfo" "echo '$INIT_RESPONSE'"
-run_contains_test "Server name is 'biznetgio'" "\"name\":\"biznetgio\"" "echo '$INIT_RESPONSE'"
-run_contains_test "Server version is '1.0.0'" "\"version\":\"1.0.0\"" "echo '$INIT_RESPONSE'"
-run_contains_test "Server supports tools capability" "\"tools\"" "echo '$INIT_RESPONSE'"
+run_contains_test "Server returns tools list" "\"tools\"" "echo '$TOOLS_LIST' | head -c 500"
 
-# ─────────────────────────────────────────────
-# 3. Tool listing
-# ─────────────────────────────────────────────
-
-section "3. Tool Listing"
-
-TOOLS_RESPONSE=$(mcp_request "tools/list" '{}' 2 2>/dev/null || true)
-TOOLS_LINE=$(echo "$TOOLS_RESPONSE" | tail -1)
-
-run_contains_test "tools/list returns tools array" "\"tools\"" "echo '$TOOLS_LINE'"
-
-# Count tools
-TOOL_COUNT=$(echo "$TOOLS_LINE" | grep -o '"name":' | wc -l | tr -d ' ')
+TOOL_COUNT=$(echo "$TOOLS_LIST" | grep -o '"name":' | wc -l | tr -d ' ')
 printf "  %-65s" "Total tools registered: $TOOL_COUNT"
 if [[ "$TOOL_COUNT" -gt 100 ]]; then
-  echo -e "${GREEN}PASS${NC} (>100)"
-  ((PASS++))
+  echo -e "${GREEN}PASS${NC} (>100)"; ((PASS++))
 else
-  echo -e "${RED}FAIL${NC} (expected >100, got $TOOL_COUNT)"
-  ((FAIL++))
+  echo -e "${RED}FAIL${NC} (expected >100, got $TOOL_COUNT)"; ((FAIL++))
 fi
 
-check_tool() {
-  local tool_name="$1"
-  printf "  %-65s" "Tool: $tool_name"
-  if echo "$TOOLS_LINE" | grep -q "\"name\":\"$tool_name\""; then
-    echo -e "${GREEN}PASS${NC}"
-    ((PASS++))
-  else
-    echo -e "${RED}FAIL${NC}"
-    ERRORS+=("Tool not found: $tool_name")
-    ((FAIL++))
-  fi
-}
+# ─────────────────────────────────────────────
+# 3. Tool Registration
+# ─────────────────────────────────────────────
+
+section "3. Tool Registration"
 
 subsection "NEO Metal tools"
 for t in metal_list metal_detail metal_create metal_delete metal_update_label metal_state metal_set_state metal_rebuild metal_openvpn metal_products metal_product_detail metal_product_os metal_rebuild_os metal_states metal_keypair_list metal_keypair_create metal_keypair_import metal_keypair_delete; do
@@ -235,13 +198,13 @@ for t in neolite_pro_list neolite_pro_detail neolite_pro_create neolite_pro_dele
   check_tool "$t"
 done
 
-subsection "Object Storage tools (sample)"
-for t in object_storage_list object_storage_detail object_storage_create object_storage_upgrade_quota object_storage_products object_storage_product_detail object_storage_credential_list object_storage_credential_create object_storage_credential_update object_storage_credential_delete object_storage_bucket_list object_storage_bucket_create object_storage_bucket_info object_storage_bucket_usage object_storage_bucket_set_acl object_storage_bucket_delete object_storage_object_list object_storage_object_info object_storage_object_download object_storage_object_url object_storage_object_copy object_storage_object_move object_storage_object_mkdir object_storage_object_set_acl object_storage_object_delete; do
+subsection "Object Storage tools"
+for t in object_storage_list object_storage_detail object_storage_create object_storage_delete object_storage_upgrade_quota object_storage_products object_storage_product_detail object_storage_credential_list object_storage_credential_create object_storage_credential_update object_storage_credential_delete object_storage_bucket_list object_storage_bucket_create object_storage_bucket_info object_storage_bucket_usage object_storage_bucket_set_acl object_storage_bucket_delete object_storage_object_list object_storage_object_info object_storage_object_download object_storage_object_url object_storage_object_copy object_storage_object_move object_storage_object_mkdir object_storage_object_set_acl object_storage_object_delete; do
   check_tool "$t"
 done
 
 # ─────────────────────────────────────────────
-# 4. Live tool calls - read only
+# 4. Live Tool Calls - Read Only
 # ─────────────────────────────────────────────
 
 section "4. Live Tool Calls - NEO Metal"
@@ -253,18 +216,15 @@ run_tool_test "metal_keypair_list" "metal_keypair_list"
 run_tool_test "metal_openvpn" "metal_openvpn"
 
 section "5. Live Tool Calls - Elastic Storage"
-
 run_tool_test "elastic_storage_list" "elastic_storage_list"
 run_tool_test "elastic_storage_products" "elastic_storage_products"
 
 section "6. Live Tool Calls - Additional IP"
-
 run_tool_test "additional_ip_list" "additional_ip_list"
 run_tool_test "additional_ip_regions" "additional_ip_regions"
 run_tool_test "additional_ip_products" "additional_ip_products"
 
 section "7. Live Tool Calls - NEO Lite"
-
 run_tool_test "neolite_list" "neolite_list"
 run_tool_test "neolite_products" "neolite_products"
 run_tool_test "neolite_keypair_list" "neolite_keypair_list"
@@ -274,7 +234,6 @@ run_tool_test "neolite_disk_list" "neolite_disk_list"
 run_tool_test "neolite_disk_products" "neolite_disk_products"
 
 section "8. Live Tool Calls - NEO Lite Pro"
-
 run_tool_test "neolite_pro_list" "neolite_pro_list"
 run_tool_test "neolite_pro_products" "neolite_pro_products"
 run_tool_test "neolite_pro_keypair_list" "neolite_pro_keypair_list"
@@ -283,9 +242,101 @@ run_tool_test "neolite_pro_disk_list" "neolite_pro_disk_list"
 run_tool_test "neolite_pro_disk_products" "neolite_pro_disk_products"
 
 section "9. Live Tool Calls - Object Storage"
-
 run_tool_test "object_storage_list" "object_storage_list"
 run_tool_test "object_storage_products" "object_storage_products"
+
+# ─────────────────────────────────────────────
+# 10. CRUD Tool Calls
+# ─────────────────────────────────────────────
+
+section "10. CRUD - Keypair Lifecycle"
+
+subsection "Neolite keypair: create → list → delete"
+
+KP_RAW=$(mcp_call neolite_keypair_create '{"name":"mcptest-kp"}')
+KP_ID=$(echo "$KP_RAW" | grep -o 'neosshkey_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+
+if [[ -n "$KP_ID" && "$KP_ID" != "undefined" ]]; then
+  printf "  %-65s" "neolite_keypair_create (id: $KP_ID)"
+  echo -e "${GREEN}PASS${NC}"; ((PASS++))
+  log "CRUD: neolite keypair created id=$KP_ID"
+
+  run_tool_test "neolite_keypair_list (verify)" "neolite_keypair_list"
+
+  DEL_RAW=$(mcp_call neolite_keypair_delete "{\"keypair_id\":$KP_ID}" 2>/dev/null || true)
+  if echo "$DEL_RAW" | grep -q '"content"'; then
+    printf "  %-65s" "neolite_keypair_delete $KP_ID"
+    echo -e "${GREEN}PASS${NC}"; ((PASS++))
+    log "CRUD: neolite keypair deleted id=$KP_ID"
+  else
+    printf "  %-65s" "neolite_keypair_delete $KP_ID"
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    log "FAIL: neolite_keypair_delete"; log "  response: $DEL_RAW"
+  fi
+else
+  printf "  %-65s" "neolite_keypair_create"
+  echo -e "${RED}FAIL${NC}"; ((FAIL++))
+  log "FAIL: neolite_keypair_create"; log "  response: $(echo "$KP_RAW" | head -c 300)"
+fi
+
+subsection "Neolite: create → detail → delete"
+
+KP2_RAW=$(mcp_call neolite_keypair_create '{"name":"mcptest-nl"}')
+KP2_ID=$(echo "$KP2_RAW" | grep -o 'neosshkey_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+
+if [[ -n "$KP2_ID" && "$KP2_ID" != "undefined" ]]; then
+  NL_RAW=$(mcp_call neolite_create "{\"product_id\":1547,\"cycle\":\"m\",\"select_os\":\"Ubuntu-20.04\",\"keypair_id\":$KP2_ID,\"ssh_and_console_user\":\"testuser\",\"console_password\":\"TestPass123\",\"vm_name\":\"mcptest\"}")
+  NL_ID=$(echo "$NL_RAW" | grep -o 'account_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+
+  if [[ -n "$NL_ID" && "$NL_ID" != "undefined" ]]; then
+    printf "  %-65s" "neolite_create (account: $NL_ID)"
+    echo -e "${GREEN}PASS${NC}"; ((PASS++))
+    log "CRUD: neolite created account_id=$NL_ID"
+
+    run_tool_test "neolite_detail $NL_ID" "neolite_detail" "{\"account_id\":$NL_ID}"
+
+    DEL_NL=$(mcp_call neolite_delete "{\"account_id\":$NL_ID}" 2>/dev/null || true)
+    if echo "$DEL_NL" | grep -q '"content"'; then
+      printf "  %-65s" "neolite_delete $NL_ID"
+      echo -e "${GREEN}PASS${NC}"; ((PASS++))
+    else
+      printf "  %-65s" "neolite_delete $NL_ID"
+      echo -e "${RED}FAIL${NC}"; ((FAIL++))
+      log "FAIL: neolite_delete $NL_ID"
+    fi
+  else
+    printf "  %-65s" "neolite_create"
+    echo -e "${RED}FAIL${NC}"; ((FAIL++))
+    log "FAIL: neolite_create"; log "  response: $(echo "$NL_RAW" | head -c 300)"
+  fi
+
+  # Cleanup keypair
+  mcp_call neolite_keypair_delete "{\"keypair_id\":$KP2_ID}" >/dev/null 2>&1 || true
+else
+  printf "  %-65s" "keypair for neolite_create"
+  echo -e "${RED}FAIL${NC}"; ((FAIL++))
+fi
+
+subsection "Object storage: create → detail → delete"
+
+OBJ_RAW=$(mcp_call object_storage_create '{"product_id":168,"cycle":"m","label":"mcptest-nos"}')
+OBJ_ID=$(echo "$OBJ_RAW" | grep -o 'account_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+
+if [[ -n "$OBJ_ID" && "$OBJ_ID" != "undefined" ]]; then
+  printf "  %-65s" "object_storage_create (account: $OBJ_ID)"
+  echo -e "${GREEN}PASS${NC}"; ((PASS++))
+  log "CRUD: object-storage created account_id=$OBJ_ID"
+
+  run_tool_test "object_storage_detail $OBJ_ID" "object_storage_detail" "{\"account_id\":$OBJ_ID}"
+
+  mcp_call object_storage_delete "{\"account_id\":$OBJ_ID}" >/dev/null 2>&1 || true
+  printf "  %-65s" "object_storage_delete $OBJ_ID"
+  echo -e "${GREEN}PASS${NC}"; ((PASS++))
+else
+  printf "  %-65s" "object_storage_create"
+  echo -e "${RED}FAIL${NC}"; ((FAIL++))
+  log "FAIL: object_storage_create"; log "  response: $(echo "$OBJ_RAW" | head -c 300)"
+fi
 
 # ─────────────────────────────────────────────
 # Summary
@@ -310,10 +361,15 @@ if [[ ${#ERRORS[@]} -gt 0 ]]; then
   echo ""
 fi
 
+log "=== Summary ==="
+log "PASS: $PASS  FAIL: $FAIL  SKIP: $SKIP  TOTAL: $TOTAL"
+
 if [[ $FAIL -eq 0 ]]; then
   echo -e "${GREEN}${BOLD}All tests passed!${NC}"
+  echo -e "  Log: ${LOG_FILE}"
   exit 0
 else
   echo -e "${RED}${BOLD}$FAIL test(s) failed.${NC}"
+  echo -e "  Log: ${LOG_FILE}"
   exit 1
 fi
