@@ -4,10 +4,16 @@
 # Loads .env for staging base URL and API key
 #
 # Usage:
-#   ./scripts/test-cli.sh
+#   ./scripts/test-cli.sh              # Normal mode
+#   ./scripts/test-cli.sh --verbose    # Show command output on PASS and FAIL
 #
 
 set -uo pipefail
+
+VERBOSE=false
+if [[ "${1:-}" == "--verbose" || "${1:-}" == "-v" ]]; then
+  VERBOSE=true
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -64,6 +70,12 @@ log ""
 # Helpers
 # ─────────────────────────────────────────────
 
+verbose_out() {
+  if [[ "$VERBOSE" == true && -n "${1:-}" ]]; then
+    echo "$1" | head -20 | sed 's/^/    │ /'
+  fi
+}
+
 log_failure() {
   local description="$1"
   local cmd="$2"
@@ -98,10 +110,12 @@ run_test() {
   printf "  %-65s" "$description"
   if output=$(eval "$cmd" 2>&1); then
     echo -e "${GREEN}PASS${NC}"
+    verbose_out "$output"
     ((PASS++))
     return 0
   else
     echo -e "${RED}FAIL${NC}"
+    verbose_out "$output"
     ERRORS+=("$description\n    cmd: $cmd\n    out: $(echo "$output" | head -3)")
     log_failure "$description" "$cmd" "$output"
     ((FAIL++))
@@ -118,12 +132,14 @@ run_fail_test() {
   printf "  %-65s" "$description"
   if output=$(eval "$cmd" 2>&1); then
     echo -e "${RED}FAIL${NC} (expected error)"
+    verbose_out "$output"
     ERRORS+=("$description: expected failure but succeeded")
     log_failure "$description (expected fail)" "$cmd" "$output"
     ((FAIL++))
     return 1
   else
     echo -e "${GREEN}PASS${NC}"
+    verbose_out "$output"
     ((PASS++))
     return 0
   fi
@@ -140,10 +156,12 @@ run_contains_test() {
   output=$(eval "$cmd" 2>&1) || true
   if echo "$output" | grep -q "$expected"; then
     echo -e "${GREEN}PASS${NC}"
+    verbose_out "$output"
     ((PASS++))
     return 0
   else
     echo -e "${RED}FAIL${NC}"
+    verbose_out "$output"
     ERRORS+=("$description\n    expected: '$expected'\n    got: $(echo "$output" | head -3)")
     log_failure "$description (contains '$expected')" "$cmd" "$output"
     ((FAIL++))
@@ -168,10 +186,12 @@ run_api_test() {
       catch(e){process.exit(1)}
     })" 2>/dev/null; then
     echo -e "${GREEN}PASS${NC}"
+    verbose_out "$output"
     ((PASS++))
     return 0
   else
     echo -e "${RED}FAIL${NC}"
+    verbose_out "$output"
     ERRORS+=("$description\n    cmd: $cmd\n    out: $(echo "$output" | head -3)")
     log_failure "$description" "$cmd" "$output" "$api_path"
     ((FAIL++))
