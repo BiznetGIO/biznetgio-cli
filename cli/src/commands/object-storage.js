@@ -1,6 +1,6 @@
 import { apiRequest } from '../client.js';
 import { output } from '../utils/formatter.js';
-import { withAuth, CYCLE_CHOICES, ACL_OPTIONS } from '../utils/common.js';
+import { withAuth, CYCLE_CHOICES, ACL_OPTIONS, toInt } from '../utils/common.js';
 
 export function registerObjectStorageCommands(program) {
   const objectStorage = program
@@ -47,11 +47,11 @@ export function registerObjectStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
         label: opts.label,
       };
-      if (opts.quota) body.quota = opts.quota;
+      if (opts.quota) body.quota = toInt(opts.quota);
       if (opts.promocode) body.promocode = opts.promocode;
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('POST', '/object-storages', { apiKey: opts.apiKey, body });
@@ -66,7 +66,7 @@ export function registerObjectStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = {};
-      if (opts.addQuota) body.add_quota = opts.addQuota;
+      if (opts.addQuota) body.add_quota = toInt(opts.addQuota);
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('PUT', `/object-storages/accounts/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);

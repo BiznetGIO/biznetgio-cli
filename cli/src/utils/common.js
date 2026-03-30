@@ -22,6 +22,13 @@ export function withAuth(action) {
   };
 }
 
+// Parse value to integer if it looks numeric
+export function toInt(val) {
+  if (val === undefined || val === null) return val;
+  const n = parseInt(val, 10);
+  return isNaN(n) ? val : n;
+}
+
 export const CYCLE_CHOICES = ['m', 'a', 'q', 's', 'b', 't', 'p4', 'p5'];
 export const METAL_STATES = ['on', 'off', 'reset'];
 export const VM_STATES = ['stop', 'suspend', 'resume', 'shutdown', 'start', 'reset'];

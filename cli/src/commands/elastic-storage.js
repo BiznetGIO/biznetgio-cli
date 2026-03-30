@@ -1,6 +1,6 @@
 import { apiRequest } from '../client.js';
 import { output } from '../utils/formatter.js';
-import { withAuth, CYCLE_CHOICES } from '../utils/common.js';
+import { withAuth, CYCLE_CHOICES, toInt } from '../utils/common.js';
 
 const BASE_PATH = '/baremetal-neo-elastic-storages';
 
@@ -41,12 +41,12 @@ export function registerElasticStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
         storage_name: opts.storageName,
-        metal_account_id: opts.metalAccountId,
+        metal_account_id: toInt(opts.metalAccountId),
       };
-      if (opts.size) body.size = opts.size;
+      if (opts.size) body.size = toInt(opts.size);
       if (opts.promocode) body.promocode = opts.promocode;
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('POST', BASE_PATH, { apiKey: opts.apiKey, body });
@@ -60,7 +60,7 @@ export function registerElasticStorageCommands(program) {
     .requiredOption('--size <size>', 'New size')
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
-      const body = { size: opts.size };
+      const body = { size: toInt(opts.size) };
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('PUT', `${BASE_PATH}/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);
@@ -73,7 +73,7 @@ export function registerElasticStorageCommands(program) {
     .requiredOption('--new-product-id <new_product_id>', 'New product ID')
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
-      const body = { new_product_id: opts.newProductId };
+      const body = { new_product_id: toInt(opts.newProductId) };
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('POST', `${BASE_PATH}/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);

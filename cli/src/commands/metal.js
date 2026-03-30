@@ -1,6 +1,6 @@
 import { apiRequest } from '../client.js';
 import { output } from '../utils/formatter.js';
-import { withAuth, CYCLE_CHOICES, METAL_STATES } from '../utils/common.js';
+import { withAuth, CYCLE_CHOICES, METAL_STATES, toInt } from '../utils/common.js';
 
 export function registerMetalCommands(program) {
   const metal = program
@@ -43,11 +43,11 @@ export function registerMetalCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
-        keypair_id: opts.keypairId,
+        keypair_id: toInt(opts.keypairId),
         label: opts.label,
-        public_ip: opts.publicIp,
+        public_ip: toInt(opts.publicIp),
       };
       if (opts.selectOs) body.select_os = opts.selectOs;
       if (opts.promocode) body.promocode = opts.promocode;

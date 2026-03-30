@@ -1,6 +1,6 @@
 import { apiRequest } from '../client.js';
 import { output } from '../utils/formatter.js';
-import { withAuth, CYCLE_CHOICES } from '../utils/common.js';
+import { withAuth, CYCLE_CHOICES, toInt } from '../utils/common.js';
 
 const BASE_PATH = '/baremetal-additional-ips';
 
@@ -36,7 +36,7 @@ export function registerAdditionalIpCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
       };
       if (opts.region) body.region = opts.region;
@@ -106,7 +106,7 @@ export function registerAdditionalIpCommands(program) {
     .action(withAuth(async (opts, accountId) => {
       const data = await apiRequest('PUT', `${BASE_PATH}/${accountId}/assigns`, {
         apiKey: opts.apiKey,
-        body: { metal_account_id: opts.metalAccountId },
+        body: { metal_account_id: toInt(opts.metalAccountId) },
       });
       output(data, opts);
     }));

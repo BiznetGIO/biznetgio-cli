@@ -1,6 +1,6 @@
 import { apiRequest } from '../client.js';
 import { output } from '../utils/formatter.js';
-import { withAuth, CYCLE_CHOICES, VM_STATES } from '../utils/common.js';
+import { withAuth, CYCLE_CHOICES, VM_STATES, toInt } from '../utils/common.js';
 
 export function registerNeoliteProCommands(program) {
   const neolitePro = program
@@ -45,10 +45,10 @@ export function registerNeoliteProCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
         select_os: opts.selectOs,
-        keypair_id: opts.keypairId,
+        keypair_id: toInt(opts.keypairId),
         ssh_and_console_user: opts.sshAndConsoleUser,
         console_password: opts.consolePassword,
       };
@@ -121,7 +121,7 @@ export function registerNeoliteProCommands(program) {
     .action(withAuth(async (opts, accountId) => {
       const data = await apiRequest('PUT', `/neolite-pros/accounts/${accountId}/keypair`, {
         apiKey: opts.apiKey,
-        body: { keypair_id: opts.keypairId },
+        body: { keypair_id: toInt(opts.keypairId) },
       });
       output(data, opts);
     }));
@@ -142,7 +142,7 @@ export function registerNeoliteProCommands(program) {
     .requiredOption('--new-product-id <product_id>', 'New product ID')
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
-      const body = { new_product_id: opts.newProductId };
+      const body = { new_product_id: toInt(opts.newProductId) };
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('POST', `/neolite-pros/accounts/${accountId}/change-package`, { apiKey: opts.apiKey, body });
       output(data, opts);
@@ -164,7 +164,7 @@ export function registerNeoliteProCommands(program) {
     .requiredOption('--disk-size <size>', 'Disk size')
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
-      const body = { disk_size: opts.diskSize };
+      const body = { disk_size: toInt(opts.diskSize) };
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('PUT', `/neolite-pros/accounts/${accountId}/storage`, { apiKey: opts.apiKey, body });
       output(data, opts);
@@ -316,9 +316,9 @@ export function registerNeoliteProCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
-        keypair_id: opts.keypairId,
+        keypair_id: toInt(opts.keypairId),
         name: opts.name,
         ssh_and_console_user: opts.sshAndConsoleUser,
         console_password: opts.consolePassword,
@@ -405,12 +405,12 @@ export function registerNeoliteProCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: toInt(opts.productId),
         cycle: opts.cycle,
-        neolite_account_id: opts.neoliteAccountId,
+        neolite_account_id: toInt(opts.neoliteAccountId),
       };
       if (opts.serviceName) body.service_name = opts.serviceName;
-      if (opts.size) body.size = opts.size;
+      if (opts.size) body.size = toInt(opts.size);
       if (opts.promocode) body.promocode = opts.promocode;
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('POST', '/neolite-pros/disks', { apiKey: opts.apiKey, body });
@@ -425,7 +425,7 @@ export function registerNeoliteProCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = {};
-      if (opts.additionalSize) body.additional_size = opts.additionalSize;
+      if (opts.additionalSize) body.additional_size = toInt(opts.additionalSize);
       if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
       const data = await apiRequest('PUT', `/neolite-pros/disks/accounts/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);

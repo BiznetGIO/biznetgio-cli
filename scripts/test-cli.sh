@@ -778,7 +778,119 @@ else
   ((FAIL++))
 fi
 
-section "13. CRUD Tests - Metal Update Label"
+section "13. CRUD Tests - Metal Lifecycle"
+
+subsection "Create keypair for metal"
+METAL_TEST_KP=$($CLI metal keypair create --name "clitest-mk" --output json 2>&1)
+METAL_TEST_KP_ID=$(echo "$METAL_TEST_KP" | grep -o 'keypair_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+if [[ -z "$METAL_TEST_KP_ID" ]]; then
+  METAL_TEST_KP_ID=$(echo "$METAL_TEST_KP" | grep -o 'neosshkey_id[^0-9]*[0-9]*' | grep -o '[0-9]*' | head -1)
+fi
+
+if [[ -n "$METAL_TEST_KP_ID" ]]; then
+  printf "  %-65s" "metal keypair create (id: $METAL_TEST_KP_ID)"
+  echo -e "${GREEN}PASS${NC}"
+  verbose_out "keypair_id: $METAL_TEST_KP_ID"
+  ((PASS++))
+
+  subsection "Find available metal product"
+  # Find a product that is in stock
+  METAL_AVAIL_PRODUCT=$($CLI metal products --output json 2>/dev/null | node -e '
+    let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+      try{const j=JSON.parse(d);const a=j.filter(p=>!p.out_of_stock&&p.stock>0);
+      if(a.length)console.log(a[0].product_id)}catch(e){}})' 2>/dev/null || true)
+
+  if [[ -n "$METAL_AVAIL_PRODUCT" ]]; then
+    printf "  %-65s" "available metal product: $METAL_AVAIL_PRODUCT"
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+
+    # Find an OS for this product
+    METAL_TEST_OS=$($CLI metal product-os $METAL_AVAIL_PRODUCT --output json 2>/dev/null | node -e '
+      let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+        try{const j=JSON.parse(d);if(j.linux&&j.linux.length)console.log(j.linux[0].value)}catch(e){}})' 2>/dev/null || true)
+
+    if [[ -n "$METAL_TEST_OS" ]]; then
+      subsection "Create metal server"
+      METAL_CREATE=$($CLI metal create \
+        --product-id $METAL_AVAIL_PRODUCT --cycle m \
+        --keypair-id $METAL_TEST_KP_ID --label "clitest-mtl" \
+        --public-ip 1 --select-os "$METAL_TEST_OS" --output json 2>&1)
+      METAL_NEW_ID=$(echo "$METAL_CREATE" | json_field account_id)
+
+      if [[ -n "$METAL_NEW_ID" && "$METAL_NEW_ID" != "undefined" ]]; then
+        printf "  %-65s" "metal create (account: $METAL_NEW_ID)"
+        echo -e "${GREEN}PASS${NC}"
+        verbose_out "$METAL_CREATE"
+        ((PASS++))
+        log "CRUD: metal created account_id=$METAL_NEW_ID"
+
+        # Detail
+        run_api_test "metal detail $METAL_NEW_ID" "/baremetals/accounts/$METAL_NEW_ID" \
+          "$CLI metal detail $METAL_NEW_ID"
+
+        # State
+        run_api_test "metal state $METAL_NEW_ID" "/baremetals/accounts/$METAL_NEW_ID/state" \
+          "$CLI metal state $METAL_NEW_ID"
+
+        # Update label
+        LABEL_OUT=$($CLI metal update-label $METAL_NEW_ID --label "clitest-upd" --output json 2>&1)
+        if echo "$LABEL_OUT" | grep -qi "success\|true\|200"; then
+          printf "  %-65s" "metal update-label $METAL_NEW_ID"
+          echo -e "${GREEN}PASS${NC}"
+          verbose_out "$LABEL_OUT"
+          ((PASS++))
+        else
+          printf "  %-65s" "metal update-label $METAL_NEW_ID"
+          echo -e "${RED}FAIL${NC}"
+          verbose_out "$LABEL_OUT"
+          ERRORS+=("metal update-label $METAL_NEW_ID\n    out: $LABEL_OUT")
+          log_failure "metal update-label" "$CLI metal update-label $METAL_NEW_ID" "$LABEL_OUT"
+          ((FAIL++))
+        fi
+
+        # Delete
+        DEL_METAL=$($CLI metal delete $METAL_NEW_ID --output json 2>&1)
+        if echo "$DEL_METAL" | grep -qi "success\|true\|cancel\|scheduled\|func_"; then
+          printf "  %-65s" "metal delete $METAL_NEW_ID"
+          echo -e "${GREEN}PASS${NC}"
+          verbose_out "$DEL_METAL"
+          ((PASS++))
+        else
+          printf "  %-65s" "metal delete $METAL_NEW_ID"
+          echo -e "${RED}FAIL${NC}"
+          verbose_out "$DEL_METAL"
+          ERRORS+=("metal delete $METAL_NEW_ID\n    out: $DEL_METAL")
+          log_failure "metal delete" "$CLI metal delete $METAL_NEW_ID" "$DEL_METAL" "/baremetals/$METAL_NEW_ID"
+          ((FAIL++))
+        fi
+      else
+        printf "  %-65s" "metal create"
+        echo -e "${RED}FAIL${NC}"
+        verbose_out "$METAL_CREATE"
+        ERRORS+=("metal create failed\n    out: $(echo "$METAL_CREATE" | head -5)")
+        log_failure "metal create" "$CLI metal create ..." "$METAL_CREATE" "/baremetals"
+        ((FAIL++))
+      fi
+    else
+      skip_test "metal create" "no OS available for product $METAL_AVAIL_PRODUCT"
+    fi
+  else
+    skip_test "metal create" "no products in stock"
+  fi
+
+  # Cleanup keypair
+  $CLI metal keypair delete $METAL_TEST_KP_ID --output json >/dev/null 2>&1 || true
+else
+  printf "  %-65s" "metal keypair create"
+  echo -e "${RED}FAIL${NC}"
+  verbose_out "$METAL_TEST_KP"
+  ERRORS+=("metal keypair create failed\n    out: $METAL_TEST_KP")
+  log_failure "metal keypair create" "$CLI metal keypair create --name clitest-mk" "$METAL_TEST_KP"
+  ((FAIL++))
+fi
+
+section "14. CRUD Tests - Metal Update Label (existing)"
 
 # Find an existing metal account to test update-label
 METAL_ACC=$($CLI metal list --output json 2>/dev/null | node -e "
@@ -810,7 +922,7 @@ fi
 # 14. Output format tests
 # ─────────────────────────────────────────────
 
-section "14. Output Format Tests"
+section "15. Output Format Tests"
 
 run_contains_test "JSON output contains '{' or '['" "{\|\\[" "$CLI metal states --output json | head -1"
 run_test "Table output is not JSON" "! $CLI metal states --output table 2>&1 | head -1 | grep -q '^\s*{'"
@@ -820,7 +932,7 @@ run_test "Default output is table (not JSON)" "! $CLI metal states 2>&1 | head -
 # 11. API key override
 # ─────────────────────────────────────────────
 
-section "15. API Key Override"
+section "16. API Key Override"
 
 run_api_test "--api-key flag works" "/baremetals/states" "$CLI metal states --api-key $BIZNETGIO_API_KEY"
 run_contains_test "Bad API key returns error" "Error\|401\|Unauthorized\|error\|Invalid" \
