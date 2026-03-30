@@ -1,6 +1,6 @@
 {
   "name": "@biznetgio/cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI tool for Biznet Gio Portal API",
   "type": "module",
   "bin": {

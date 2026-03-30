@@ -1,6 +1,6 @@
 {
   "name": "@biznetgio/mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP Server for Biznet Gio Portal API",
   "type": "module",
   "main": "src/index.js",
