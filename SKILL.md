@@ -5,18 +5,22 @@ homepage: https://github.com/BiznetGIO/biznetgio-cli
 license: MIT
 required_env:
   - name: BIZNETGIO_API_KEY
-    required: true
-    description: API token from Biznet Gio Portal (https://portal.biznetgio.com). Sent as x-token header.
+    required: false
+    description: "Fallback API token. Preferred method: run `biznetgio login` — writes ~/.biznetgio.json which takes priority over this env var."
+  - name: BIZNETGIO_PORTAL_URL
+    required: false
+    description: Override portal host for login. Defaults to portal.biznetgio.com. Ignored if ~/.biznetgio.json already has portal_url.
   - name: BIZNETGIO_BASE_URL
     required: false
     description: Override API base URL. Defaults to https://api.portal.biznetgio.com/v1.
+credential_file: ~/.biznetgio.json
 required_binaries:
   - name: node
     version: ">=18"
     description: Node.js runtime for the CLI and MCP server.
   - name: npx
     description: Included with Node.js. Fetches and runs @biznetgio/cli from npm registry.
-primary_credential: BIZNETGIO_API_KEY
+primary_credential: ~/.biznetgio.json (written by `biznetgio login`)
 packages:
   - name: "@biznetgio/cli"
     registry: npm
@@ -42,12 +46,23 @@ install: npx @biznetgio/cli@latest
 | **License** | MIT |
 | **Primary Credential** | `BIZNETGIO_API_KEY` |
 
-### Required Environment Variables
+### Credential Sources (resolution order — highest priority first)
+
+| Priority | Source | Field / Var | Notes |
+|----------|--------|-------------|-------|
+| 1 | `~/.biznetgio.json` | `api_key` | Written by `biznetgio login`. Mode 0600. |
+| 2 | Environment variable | `BIZNETGIO_API_KEY` | Legacy / CI fallback. |
+| 3 | CLI flag | `--api-key <key>` | Per-command override, beats everything. |
+
+After `biznetgio login` succeeds, **no env var setup is needed** — all commands read from the credential file automatically.
+
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BIZNETGIO_API_KEY` | **Yes** | API token from [Biznet Gio Portal](https://portal.biznetgio.com). Sent as `x-token` header on every request. Do not hardcode — always use env var. |
-| `BIZNETGIO_BASE_URL` | No | Override API base URL. Defaults to `https://api.portal.biznetgio.com/v1`. Useful for staging/dev environments. |
+| `BIZNETGIO_API_KEY` | No (preferred: `biznetgio login`) | Fallback API token when `~/.biznetgio.json` is absent. |
+| `BIZNETGIO_PORTAL_URL` | No | Override portal host. Defaults to `portal.biznetgio.com`. Ignored if credential file already has `portal_url`. |
+| `BIZNETGIO_BASE_URL` | No | Override API base URL. Defaults to `https://api.portal.biznetgio.com/v1`. |
 
 ### Required Binaries
 
@@ -68,29 +83,85 @@ This skill executes the npm package `@biznetgio/cli` via `npx`, which downloads 
 
 You are an agent that can manage Biznet Gio cloud infrastructure using the CLI tool `@biznetgio/cli` and/or MCP server `@biznetgio/mcp`.
 
+## Authentication
+
+**Always check auth status before running any other command.** Follow these steps exactly:
+
+### Step 1 — Check if already logged in
+
+```bash
+npx @biznetgio/cli@latest whoami
+```
+
+Interpret the result:
+
+| Result | Meaning | Action |
+|--------|---------|--------|
+| Exit 0, shows `email` / `client_id` | Already logged in | Note the identity and proceed to the task |
+| Exit non-zero, `Not logged in` error | No credentials | Go to Step 2 |
+| Exit non-zero, `invalid JSON` error | Corrupt credential file | Tell user to delete `~/.biznetgio.json` then re-run `biznetgio login` |
+
+### Step 2 — Guide the user to log in (only if not logged in)
+
+**Do not ask the user to paste their API key.** The CLI has a secure browser-based login. Tell the user:
+
+> "You're not logged in. Please open a terminal and run:
+> ```
+> biznetgio login
+> ```
+> A browser URL will be displayed. Open it, log in, and the CLI will save your credentials automatically. Let me know when it completes."
+
+Wait for the user to confirm login is done before continuing.
+
+> **Staging / alternate portal:** If the user needs to target a different portal, they can run `BIZNETGIO_PORTAL_URL=staging.biznetgio.com biznetgio login` — the override is written into `~/.biznetgio.json` and used for all subsequent commands automatically.
+
+### Step 3 — Confirm identity after login
+
+After the user confirms login, run `whoami` again and report the result to the user:
+
+```bash
+npx @biznetgio/cli@latest whoami
+```
+
+Tell the user: "Logged in as **\<email\>** (client_id: \<client_id\>) — credentials saved to `~/.biznetgio.json`."
+
+Then proceed to the original task.
+
+### Logging out
+
+To remove saved credentials:
+
+```bash
+biznetgio logout
+```
+
+Deletes `~/.biznetgio.json`. If the file is already absent, prints "Already logged out" and exits cleanly. After logout, commands that require authentication will fail until the user runs `biznetgio login` again.
+
+---
+
 ## Important Instructions
 
-1. **Always use `npx`** to run the CLI. No installation required.
-2. **Read-only commands run without confirmation.** Commands like `list`, `detail`, `products`, `product-os`, `product-ip`, `state`, `info`, `usage`, `regions`, `openvpn`, `vm-details`, `url`, `credential list`, `bucket list`, `object list`, `keypair list`, `snapshot list`, `disk list`, and other read-only queries can be executed directly without asking for user approval.
-3. **Confirm before create, update, or delete actions.** Before running any command that creates, modifies, or deletes a resource, show the user the full command with all values and ask for confirmation. The user may want to revise parameter values before execution.
-4. **For destructive actions (delete, rebuild, state changes), double confirm.** Clearly warn the user about the impact and ask explicitly: "Are you sure?"
-5. **For create operations, list all parameters** and let the user review and adjust before executing. Show product options, OS choices, and pricing when available.
+1. **Check auth first.** Before any other command, run `whoami` as described above. Do not skip this step.
+2. **Always use `npx`** to run the CLI. No installation required.
+3. **Read-only commands run without confirmation.** Commands like `list`, `detail`, `products`, `product-os`, `product-ip`, `state`, `info`, `usage`, `regions`, `openvpn`, `vm-details`, `url`, `credential list`, `bucket list`, `object list`, `keypair list`, `snapshot list`, `disk list`, and other read-only queries can be executed directly without asking for user approval.
+4. **Confirm before create, update, or delete actions.** Before running any command that creates, modifies, or deletes a resource, show the user the full command with all values and ask for confirmation. The user may want to revise parameter values before execution.
+5. **For destructive actions (delete, rebuild, state changes), double confirm.** Clearly warn the user about the impact and ask explicitly: "Are you sure?"
+6. **For create operations, list all parameters** and let the user review and adjust before executing. Show product options, OS choices, and pricing when available.
 
 ## How to Run
 
 ```bash
-# With API key inline
-BIZNETGIO_API_KEY=<YOUR_KEY> npx @biznetgio/cli@latest <service> <action> [arguments] [options]
-
-# Or export the key first
-export BIZNETGIO_API_KEY=<YOUR_KEY>
+# After `biznetgio login` — no env vars needed, credentials come from ~/.biznetgio.json
 npx @biznetgio/cli@latest <service> <action> [arguments] [options]
 
-# Or pass API key as flag
+# Fallback: API key via env var (if credential file is absent)
+BIZNETGIO_API_KEY=<YOUR_KEY> npx @biznetgio/cli@latest <service> <action> [arguments] [options]
+
+# Per-command override (beats credential file and env var)
 npx @biznetgio/cli@latest <service> <action> --api-key <YOUR_KEY> [arguments] [options]
 ```
 
-- **API Key**: environment variable `BIZNETGIO_API_KEY` (sent as `x-token` header), or `--api-key` flag
+- **Auth**: credential file `~/.biznetgio.json` (preferred) → `BIZNETGIO_API_KEY` env → `--api-key` flag
 - **Base URL**: `https://api.portal.biznetgio.com/v1` (override with `BIZNETGIO_BASE_URL` env)
 - **Output format**: default `table`, use `--output json` for JSON output
 
@@ -430,8 +501,10 @@ MCP server configuration for Claude Desktop / Claude Code:
 
 | Error | Solution |
 |-------|----------|
-| `API key not set` | Set `export BIZNETGIO_API_KEY=xxx` or use `--api-key` flag |
-| `API Error 401` | API key is invalid or expired |
+| `Not logged in` | Run `biznetgio login` (browser-based), or set `BIZNETGIO_API_KEY` env var |
+| `invalid JSON` in `~/.biznetgio.json` | Delete `~/.biznetgio.json` and re-run `biznetgio login` |
+| `API key not set` | Run `biznetgio login`, or set `BIZNETGIO_API_KEY=xxx` env var |
+| `API Error 401` | API key is invalid or expired — run `biznetgio login` again to refresh |
 | `API Error 404` | Resource not found, check the account_id |
 | `API Error 422` | Validation error — check password regex, label max 16 chars, required fields |
 | `API Error 500` | Server error — retry or check if the resource exists |

@@ -1,8 +1,9 @@
+import { getApiKey } from './utils/credentials.js';
+
 const BASE_URL = process.env.BIZNETGIO_BASE_URL || 'https://api.portal.biznetgio.com/v1';
 
 export async function apiRequest(method, path, { body, query } = {}) {
-  const apiKey = process.env.BIZNETGIO_API_KEY;
-  if (!apiKey) throw new Error('BIZNETGIO_API_KEY environment variable not set');
+  const apiKey = getApiKey();
 
   const url = new URL(`${BASE_URL}${path}`);
   if (query) {
