@@ -23,11 +23,53 @@ Command-line tool and MCP (Model Context Protocol) server for managing [Biznet G
 - Node.js >= 18
 - API Key from [Biznet Gio Portal](https://portal.biznetgio.com)
 
-## API Key Setup
+## Authentication
+
+The CLI supports two authentication methods — browser login (recommended) and environment variable.
+
+### Browser login (recommended)
+
+```bash
+biznetgio login
+```
+
+Opens a browser URL, polls for completion, and writes credentials to `~/.biznetgio.json` with mode `0600`. All subsequent commands read the API key from that file automatically.
+
+### Environment variable
 
 ```bash
 export BIZNETGIO_API_KEY=your_api_key_here
 ```
+
+### Credential resolution order
+
+For each value the CLI resolves in this priority order:
+
+| Value | Source 1 (highest) | Source 2 | Source 3 (default) |
+|-------|---------------------|----------|--------------------|
+| API key | `~/.biznetgio.json` → `api_key` | `BIZNETGIO_API_KEY` env | *(error if missing)* |
+| Portal URL | `~/.biznetgio.json` → `portal_url` | `BIZNETGIO_PORTAL_URL` env | `portal.biznetgio.com` |
+
+The `--api-key <key>` flag takes precedence over all sources.
+
+### Credential file
+
+Location: `$HOME/.biznetgio.json`
+
+```json
+{
+  "api_key": "<JWT_TOKEN>",
+  "portal_url": "portal.biznetgio.com",
+  "email": "user@example.com",
+  "client_id": 1234,
+  "updated_at": "2026-04-24T10:00:00.000Z"
+}
+```
+
+- Created with permission `0600` (readable only by the current user).
+- Running `biznetgio login` always overwrites the file (login = credential refresh).
+- If the file is corrupt (invalid JSON), commands fail with a clear error message referencing the file path. Fix or remove the file to recover.
+- `portal_url` is stored **without the scheme** (`portal.biznetgio.com`, not `https://...`).
 
 ---
 
@@ -44,12 +86,37 @@ npm install -g @biznetgio/cli
 biznetgio <service> <action> [options]
 ```
 
+### Login
+
+```bash
+biznetgio login
+```
+
+1. Generates a secure random token and displays a portal login URL.
+2. Polls the portal every 5 seconds for up to 5 minutes.
+3. On success, decodes the JWT to extract `email` and `client_id`, then writes `~/.biznetgio.json`.
+4. Press `Ctrl+C` to cancel at any time.
+
+Example output:
+
+```
+Open the following URL in your browser to log in:
+
+  https://portal.biznetgio.com/user/login?refresh=<token>
+
+Waiting for authentication (timeout: 5 minutes)...
+⠙ Polling... (5s elapsed)
+
+✓ Logged in as user@example.com (client_id: 1234)
+  Credentials saved to /home/user/.biznetgio.json
+```
+
 ### Global Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--api-key <key>` | API key (overrides env var) | `BIZNETGIO_API_KEY` |
-| `--output <format>` | Output format: `json` or `table` | `json` |
+| `--api-key <key>` | API key (overrides all other sources) | *(see resolution order)* |
+| `--output <format>` | Output format: `json` or `table` | `table` |
 | `-V, --version` | Show version | |
 | `-h, --help` | Show help | |
 

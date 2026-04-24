@@ -1,9 +1,13 @@
+import { getApiKey as credGetApiKey } from './utils/credentials.js';
+
 const BASE_URL = process.env.BIZNETGIO_BASE_URL || 'https://api.portal.biznetgio.com/v1';
 
 export function getApiKey(cmdOpts) {
-  const key = cmdOpts?.apiKey || process.env.BIZNETGIO_API_KEY;
+  const key = credGetApiKey(cmdOpts?.apiKey);
   if (!key) {
-    console.error('Error: API key not set. Use --api-key or set BIZNETGIO_API_KEY environment variable.');
+    console.error(
+      'Error: API key not set. Run `biznetgio login`, use --api-key flag, or set BIZNETGIO_API_KEY environment variable.'
+    );
     process.exit(1);
   }
   return key;
