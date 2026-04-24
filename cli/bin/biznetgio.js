@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { Command } from 'commander';
 import { registerLoginCommand } from '../src/commands/login.js';
 import { registerWhoamiCommand } from '../src/commands/whoami.js';
+import { registerLogoutCommand } from '../src/commands/logout.js';
 import { registerMetalCommands } from '../src/commands/metal.js';
 import { registerElasticStorageCommands } from '../src/commands/elastic-storage.js';
 import { registerAdditionalIpCommands } from '../src/commands/additional-ip.js';
@@ -22,6 +23,7 @@ program
 
 registerLoginCommand(program);
 registerWhoamiCommand(program);
+registerLogoutCommand(program);
 registerMetalCommands(program);
 registerElasticStorageCommands(program);
 registerAdditionalIpCommands(program);

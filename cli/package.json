@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/biznetgio.js",
-    "test": "node --test test/credentials.test.js test/login.test.js test/whoami.test.js"
+    "test": "node --test test/credentials.test.js test/login.test.js test/whoami.test.js test/logout.test.js"
   },
   "keywords": [
     "biznetgio",
