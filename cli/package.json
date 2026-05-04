@@ -1,6 +1,6 @@
 {
   "name": "@biznetgio/cli",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "CLI tool for Biznet Gio Portal API",
   "type": "module",
   "bin": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/biznetgio.js",
-    "test": "node --test test/credentials.test.js test/login.test.js test/whoami.test.js test/logout.test.js"
+    "test": "node --test test/credentials.test.js test/login.test.js test/whoami.test.js test/logout.test.js test/list.test.js"
   },
   "keywords": [
     "biznetgio",
