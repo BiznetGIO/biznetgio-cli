@@ -36,12 +36,16 @@ export BIZNETGIO_API_KEY=your_api_key_here
 ### Installation
 
 ```bash
-# Run directly without installing
+# Run directly without installing (no setup required)
 npx @biznetgio/cli@latest <service> <action> [options]
 
-# Or install globally
+# Install globally (use anywhere)
 npm install -g @biznetgio/cli
 biznetgio <service> <action> [options]
+
+# Install as local project dependency
+npm install @biznetgio/cli
+npx biznetgio <service> <action> [options]
 ```
 
 ### Global Options
@@ -54,6 +58,8 @@ biznetgio <service> <action> [options]
 | `-h, --help` | Show help | |
 
 ### Usage Examples
+
+**Using npx (no install required)**
 
 ```bash
 # List all NEO Metal servers
@@ -90,6 +96,45 @@ npx @biznetgio/cli@latest metal keypair create --name my-key
 
 # Override API key per command
 npx @biznetgio/cli@latest metal list --api-key another_key_here
+```
+
+**Using installed CLI (`npm install -g @biznetgio/cli`)**
+
+```bash
+# List all NEO Metal servers
+biznetgio metal list
+
+# Server detail with table output
+biznetgio metal detail 12345 --output table
+
+# List NEO Lite products
+biznetgio neolite products
+
+# Create a NEO Lite instance
+biznetgio neolite create \
+  --product-id 1 \
+  --cycle m \
+  --select-os ubuntu-22.04 \
+  --keypair-id 10 \
+  --ssh-and-console-user myuser \
+  --console-password MyP@ssw0rd
+
+# Manage VM state
+biznetgio neolite set-state 12345 start
+biznetgio neolite set-state 12345 stop
+
+# List object storage buckets
+biznetgio object-storage bucket list 12345
+
+# Generate a signed URL for an object
+biznetgio object-storage object url 12345 my-bucket file.pdf --expiry 3600
+
+# Manage keypairs
+biznetgio metal keypair list
+biznetgio metal keypair create --name my-key
+
+# Override API key per command
+biznetgio metal list --api-key another_key_here
 ```
 
 ### Command Reference
