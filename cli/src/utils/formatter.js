@@ -15,11 +15,27 @@ const SKIP_KEYS = new Set(['billing_extra']);
 // Keys to summarize instead of showing raw
 const BILLING_KEY = 'billing';
 
+// Keys whose values are masked in table output
+const SENSITIVE_KEYS = new Set(['password', 'console_password', 'secret', 'secret_key', 'access_key', 'token']);
+
+// cli-table3 chars for compact style: only a header separator, no other borders
+const COMPACT_CHARS = {
+  'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
+  'bottom': '', 'bottom-mid': '', 'bottom-left': '', 'bottom-right': '',
+  'left': '', 'left-mid': '─', 'mid': '─', 'mid-mid': '─',
+  'right': '', 'right-mid': '─', 'middle': '  ',
+};
+
 // Flatten a row for table display
 function flattenRow(row) {
   const flat = {};
   for (const [k, v] of Object.entries(row)) {
     if (SKIP_KEYS.has(k)) continue;
+
+    if (SENSITIVE_KEYS.has(k)) {
+      flat[k] = '••••••••';
+      continue;
+    }
 
     if (v === null || v === undefined) {
       flat[k] = '';
@@ -40,11 +56,13 @@ function flattenRow(row) {
       // Inline nested object fields with prefix
       for (const [nk, nv] of Object.entries(v)) {
         if (nv === null || nv === undefined || nv === '') continue;
-        if (typeof nv === 'object' && !Array.isArray(nv)) {
+        if (SENSITIVE_KEYS.has(nk)) {
+          flat[nk] = '••••••••';
+        } else if (typeof nv === 'object' && !Array.isArray(nv)) {
           // 2nd level nested: flatten with dot notation
           for (const [nnk, nnv] of Object.entries(nv)) {
             if (nnv !== null && nnv !== undefined && nnv !== '') {
-              flat[`${nk}.${nnk}`] = Array.isArray(nnv) ? nnv.join(', ') : String(nnv);
+              flat[`${nk}.${nnk}`] = SENSITIVE_KEYS.has(nnk) ? '••••••••' : (Array.isArray(nnv) ? nnv.join(', ') : String(nnv));
             }
           }
         } else if (Array.isArray(nv)) {
@@ -124,12 +142,13 @@ function printTable(arr) {
 
   const table = new Table({
     head: keys.map(k => chalk.cyan(k)),
+    chars: COMPACT_CHARS,
     style: { head: [], border: [] },
-    wordWrap: true,
+    wordWrap: false,
   });
 
   for (const row of rows) {
-    table.push(keys.map(k => truncate(row[k] || '', 60)));
+    table.push(keys.map(k => truncate(row[k] || '', 40)));
   }
 
   console.log(table.toString());
@@ -138,12 +157,13 @@ function printTable(arr) {
 function printObject(obj) {
   const flat = flattenRow(obj);
   const table = new Table({
+    chars: COMPACT_CHARS,
     style: { head: [], border: [] },
-    wordWrap: true,
+    wordWrap: false,
   });
 
   for (const [k, v] of Object.entries(flat)) {
-    table.push({ [chalk.cyan(k)]: truncate(String(v), 100) });
+    table.push({ [chalk.cyan(k)]: truncate(String(v), 80) });
   }
 
   console.log(table.toString());
