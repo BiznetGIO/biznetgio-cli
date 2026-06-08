@@ -18,6 +18,15 @@ const BILLING_KEY = 'billing';
 // Keys whose values are masked in table output
 const SENSITIVE_KEYS = new Set(['password', 'console_password', 'secret', 'secret_key', 'access_key', 'token']);
 
+// Preferred columns for the compact table view, in display order
+const PRIORITY_KEYS = [
+  'id', 'name', 'label', 'hostname', 'username', 'bucket',
+  'status', 'state', 'ip', 'ip_address', 'price/mo', 'type', 'region',
+];
+
+// Max columns shown in the compact table view before hiding the rest
+const MAX_TABLE_COLS = 5;
+
 // cli-table3 chars for compact style: only a header separator, no other borders
 const COMPACT_CHARS = {
   'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
@@ -25,6 +34,19 @@ const COMPACT_CHARS = {
   'left': '', 'left-mid': '─', 'mid': '─', 'mid-mid': '─',
   'right': '', 'right-mid': '─', 'middle': '  ',
 };
+
+// Pick up to MAX_TABLE_COLS columns: priority keys first, then fill in order
+function selectColumns(allKeys) {
+  const selected = [];
+  for (const k of PRIORITY_KEYS) {
+    if (allKeys.includes(k)) selected.push(k);
+  }
+  for (const k of allKeys) {
+    if (selected.length >= MAX_TABLE_COLS) break;
+    if (!selected.includes(k)) selected.push(k);
+  }
+  return selected.slice(0, MAX_TABLE_COLS);
+}
 
 // Flatten a row for table display
 function flattenRow(row) {
@@ -97,10 +119,26 @@ export function output(data, opts = {}) {
     return;
   }
 
+  if (extracted === null || extracted === undefined) {
+    console.log('No data found.');
+    return;
+  }
+
+  // Vertical view: each record as a key:value block. Best for many fields.
+  if (format === 'list') {
+    if (Array.isArray(extracted)) {
+      printList(extracted);
+    } else if (typeof extracted === 'object') {
+      printObject(extracted);
+    } else {
+      console.log(String(extracted));
+    }
+    return;
+  }
+
+  // Default compact table (column-limited for arrays)
   if (format === 'table') {
-    if (extracted === null || extracted === undefined) {
-      console.log('No data found.');
-    } else if (Array.isArray(extracted)) {
+    if (Array.isArray(extracted)) {
       printTable(extracted);
     } else if (typeof extracted === 'object') {
       printObject(extracted);
@@ -138,7 +176,11 @@ function printTable(arr) {
   for (const row of rows) {
     for (const k of Object.keys(row)) keySet.add(k);
   }
-  const keys = [...keySet];
+  const allKeys = [...keySet];
+
+  // Limit to priority columns so wide data stays readable
+  const keys = selectColumns(allKeys);
+  const hidden = allKeys.length - keys.length;
 
   const table = new Table({
     head: keys.map(k => chalk.cyan(k)),
@@ -152,19 +194,39 @@ function printTable(arr) {
   }
 
   console.log(table.toString());
+
+  if (hidden > 0) {
+    console.log(chalk.dim(`\n… +${hidden} more column${hidden > 1 ? 's' : ''} hidden. Use --output list or --output json to see all fields.`));
+  }
 }
 
-function printObject(obj) {
-  const flat = flattenRow(obj);
-  const table = new Table({
-    chars: COMPACT_CHARS,
-    style: { head: [], border: [] },
-    wordWrap: false,
-  });
-
-  for (const [k, v] of Object.entries(flat)) {
-    table.push({ [chalk.cyan(k)]: truncate(String(v), 80) });
+// Vertical list: render each record as a key:value block separated by a rule
+function printList(arr) {
+  if (arr.length === 0) {
+    console.log('No data found.');
+    return;
   }
 
-  console.log(table.toString());
+  if (typeof arr[0] !== 'object') {
+    arr.forEach((v, i) => console.log(`${chalk.dim(`[${i + 1}]`)} ${String(v)}`));
+    return;
+  }
+
+  arr.forEach((row, i) => {
+    const flat = flattenRow(row);
+    const keyWidth = Math.max(...Object.keys(flat).map(k => k.length), 0);
+    if (i > 0) console.log(chalk.dim('─'.repeat(40)));
+    for (const [k, v] of Object.entries(flat)) {
+      console.log(`${chalk.cyan(k.padEnd(keyWidth))}  ${truncate(String(v), 100)}`);
+    }
+  });
+}
+
+// Single record: aligned key/value pairs, no per-row separators
+function printObject(obj) {
+  const flat = flattenRow(obj);
+  const keyWidth = Math.max(...Object.keys(flat).map(k => k.length), 0);
+  for (const [k, v] of Object.entries(flat)) {
+    console.log(`${chalk.cyan(k.padEnd(keyWidth))}  ${truncate(String(v), 100)}`);
+  }
 }

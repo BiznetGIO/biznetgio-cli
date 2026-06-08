@@ -120,9 +120,19 @@ Waiting for authentication (timeout: 5 minutes)...
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--api-key <key>` | API key (overrides all other sources) | *(see resolution order)* |
-| `--output <format>` | Output format: `json` or `table` | `table` |
+| `--output <format>` | Output format: `table`, `list`, or `json` | `table` |
 | `-V, --version` | Show version | |
 | `-h, --help` | Show help | |
+
+#### Output Formats
+
+| Format | Description |
+|--------|-------------|
+| `table` | Compact table showing up to 5 key columns (id, name, status, …). Best for scanning many records. Hidden columns are noted at the bottom. |
+| `list` | Vertical view — each record printed as a `key: value` block. Best when you need to see **all** fields of records that have many columns. |
+| `json` | Raw JSON. Best for scripting, piping to `jq`, or seeing the complete unformatted response. |
+
+> Sensitive fields (`password`, `console_password`, `secret`, `token`, …) are masked as `••••••••` in `table` and `list` output. Use `json` if you need the raw value.
 
 ### Usage Examples
 
@@ -202,6 +212,11 @@ biznetgio metal keypair create --name my-key
 
 # Override API key per command
 biznetgio metal list --api-key another_key_here
+
+# Choose output format
+biznetgio metal list                  # compact table (default)
+biznetgio metal list --output list    # full fields, one record per block
+biznetgio metal list --output json    # raw JSON (pipe to jq, etc.)
 ```
 
 ### Command Reference
