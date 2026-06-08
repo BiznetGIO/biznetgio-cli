@@ -36,12 +36,12 @@ export function registerAdditionalIpCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
       };
       if (opts.region) body.region = opts.region;
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', BASE_PATH, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
