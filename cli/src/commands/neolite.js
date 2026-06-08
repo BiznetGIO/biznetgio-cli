@@ -45,17 +45,17 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
         select_os: opts.selectOs,
-        keypair_id: opts.keypairId,
+        keypair_id: Number(opts.keypairId),
         ssh_and_console_user: opts.sshAndConsoleUser,
         console_password: opts.consolePassword,
       };
       if (opts.vmName) body.vm_name = opts.vmName;
       if (opts.description) body.description = opts.description;
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', '/neolites', { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -143,7 +143,7 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = { new_product_id: opts.newProductId };
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', `/neolites/accounts/${accountId}/change-package`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -165,7 +165,7 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = { disk_size: opts.diskSize };
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('PUT', `/neolites/accounts/${accountId}/storage`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -187,7 +187,7 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = { neolitepro_product_id: opts.neoliteproProductId };
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', `/neolites/accounts/${accountId}/migrate-to-pro`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -318,7 +318,7 @@ export function registerNeoliteCommands(program) {
       if (opts.name) body.name = opts.name;
       if (opts.description) body.description = opts.description;
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', `/neolites/accounts/${accountId}/snapshot`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -338,16 +338,16 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
-        keypair_id: opts.keypairId,
+        keypair_id: Number(opts.keypairId),
         name: opts.name,
         ssh_and_console_user: opts.sshAndConsoleUser,
         console_password: opts.consolePassword,
       };
       if (opts.description) body.description = opts.description;
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', `/neolites/snapshots/accounts/${accountId}/create`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -427,14 +427,14 @@ export function registerNeoliteCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
-        neolite_account_id: opts.neoliteAccountId,
+        neolite_account_id: Number(opts.neoliteAccountId),
       };
       if (opts.serviceName) body.service_name = opts.serviceName;
-      if (opts.size) body.size = opts.size;
+      if (opts.size) body.size = Number(opts.size);
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', '/neolites/disks', { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -448,7 +448,7 @@ export function registerNeoliteCommands(program) {
     .action(withAuth(async (opts, accountId) => {
       const body = {};
       if (opts.additionalSize) body.additional_size = opts.additionalSize;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('PUT', `/neolites/disks/accounts/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));

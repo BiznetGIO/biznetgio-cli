@@ -33,25 +33,25 @@ export function registerMetalCommands(program) {
   metal
     .command('create')
     .description('Create a bare metal server')
-    .requiredOption('--product-id <product_id>', 'Product ID')
+    .requiredOption('--product-id <product_id>', 'Product ID (integer)')
     .requiredOption('--cycle <cycle>', `Billing cycle (${CYCLE_CHOICES.join(', ')})`)
-    .requiredOption('--keypair-id <keypair_id>', 'Keypair ID')
+    .requiredOption('--keypair-id <keypair_id>', 'Keypair ID (integer)')
     .requiredOption('--label <label>', 'Server label')
-    .requiredOption('--public-ip <public_ip>', 'Public IP')
-    .option('--select-os <os>', 'Operating system')
+    .option('--public-ip <public_ip>', 'Request a public IP (only value: 1)', '1')
+    .option('--select-os <os>', 'Operating system', 'ubuntu-22')
     .option('--promocode <promocode>', 'Promo code')
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
-        keypair_id: opts.keypairId,
+        keypair_id: Number(opts.keypairId),
         label: opts.label,
-        public_ip: opts.publicIp,
+        public_ip: Number(opts.publicIp),
       };
       if (opts.selectOs) body.select_os = opts.selectOs;
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      body.pay_invoice_with_cc = opts.payInvoiceWithCc ? 'yes' : 'no';
       const data = await apiRequest('POST', '/baremetals', { apiKey: opts.apiKey, body });
       output(data, opts);
     }));

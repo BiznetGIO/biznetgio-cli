@@ -2,6 +2,9 @@
 
 import 'dotenv/config';
 import { Command } from 'commander';
+import { registerLoginCommand } from '../src/commands/login.js';
+import { registerWhoamiCommand } from '../src/commands/whoami.js';
+import { registerLogoutCommand } from '../src/commands/logout.js';
 import { registerMetalCommands } from '../src/commands/metal.js';
 import { registerElasticStorageCommands } from '../src/commands/elastic-storage.js';
 import { registerAdditionalIpCommands } from '../src/commands/additional-ip.js';
@@ -16,8 +19,11 @@ program
   .description('CLI tool for Biznet Gio Portal API')
   .version('1.0.0')
   .option('--api-key <key>', 'API key (overrides BIZNETGIO_API_KEY env)')
-  .option('--output <format>', 'Output format: table or json', 'table');
+  .option('--output <format>', 'Output format: table, list, or json', 'table');
 
+registerLoginCommand(program);
+registerWhoamiCommand(program);
+registerLogoutCommand(program);
 registerMetalCommands(program);
 registerElasticStorageCommands(program);
 registerAdditionalIpCommands(program);

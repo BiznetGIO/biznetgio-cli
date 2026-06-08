@@ -41,14 +41,14 @@ export function registerElasticStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts) => {
       const body = {
-        product_id: opts.productId,
+        product_id: Number(opts.productId),
         cycle: opts.cycle,
         storage_name: opts.storageName,
-        metal_account_id: opts.metalAccountId,
+        metal_account_id: Number(opts.metalAccountId),
       };
-      if (opts.size) body.size = opts.size;
+      if (opts.size) body.size = Number(opts.size);
       if (opts.promocode) body.promocode = opts.promocode;
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', BASE_PATH, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -61,7 +61,7 @@ export function registerElasticStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = { size: opts.size };
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('PUT', `${BASE_PATH}/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
@@ -74,7 +74,7 @@ export function registerElasticStorageCommands(program) {
     .option('--pay-invoice-with-cc', 'Pay invoice with credit card')
     .action(withAuth(async (opts, accountId) => {
       const body = { new_product_id: opts.newProductId };
-      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = true;
+      if (opts.payInvoiceWithCc) body.pay_invoice_with_cc = 'yes';
       const data = await apiRequest('POST', `${BASE_PATH}/${accountId}`, { apiKey: opts.apiKey, body });
       output(data, opts);
     }));
